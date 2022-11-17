@@ -1,3 +1,3 @@
 # windpark-optimization
 
-Added a the ```devel``` which we can use for testing code
+Added a the ```devel``` branch that can be used for testing and developing code
