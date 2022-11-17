@@ -350,7 +350,18 @@ def objective_fun(x_vector, U, wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_
     return -P, -g
     #return delta_u_ij
         
-        
+def partial_fun(fun, x, fun_param, dl=0.1):
+    dP = np.zeros(len(x))
+    for i in np.arange(len(x)):
+        dx = np.zeros(x.shape)
+        dx[i] = dl
+        fun_p, g_tmp = fun(x+dx, *fun_param)
+        fun_n, g_tmp = fun(x-dx, *fun_param)
+        dP[i] = (fun_p - fun_n)/(2*dl)
+    return dP
+
+
+
 # Main program
 
 # Induction factor alpha, based on the actuator disc model
@@ -396,6 +407,8 @@ U = 20
 wind_dir = 0.01*np.pi #1.0*np.pi #0.23*np.pi #0.28*np.pi
 
 
+
+
 r_i = np.atleast_2d([0.1])
 theta_i = np.atleast_2d([1])
 
@@ -413,12 +426,19 @@ print()
 #x_vector[:,0] = np.reshape(x_all, -1)
 x_vector = np.reshape(x_all, -1)
 
+############################################################################################## ADDED EJ
+fun_param = U,wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_p
 
-constr = LinearConstraint(np.identity(2*N_turb), x_vector-50, x_vector+50 )
+#P, dP = objective_fun(x_vector, U,wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_p)
 
-wind_dirs = np.array([0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75])*np.pi + 1e-2
+P, dP = objective_fun(x_vector, *fun_param)
 
-# Visualize wind field due to wake effects
+dP_num = partial_fun(objective_fun, x_vector, fun_param)
+
+print(P, dP, dP_num)
+
+
+# Print wind field
 N_x = 150
 N_y = 600
 x_grid = np.linspace(-100,100,N_x)
@@ -444,40 +464,184 @@ for ix in range(N_x):
 fig = plt.figure(constrained_layout=True)
 
 (xv, yv) = np.meshgrid(x_grid, y_grid)
-ax = fig.add_subplot(111, projection='3d')
-surf = ax.plot_surface(xv, yv, u_eval.T, cmap=plt.cm.coolwarm)
-cset = ax.contourf(xv, yv, u_eval.T, zdir='z', offset=25, cmap=cm.coolwarm)
-ax.scatter3D(x_all[:,0], x_all[:,1], np.full((1,N_turb),25),'+k', s=4)
+#ax = fig.add_subplot(111, projection='3d')
+#surf = ax.plot_surface(xv, yv, u_eval.T, cmap=plt.cm.coolwarm)
+#cset = ax.contourf(xv, yv, u_eval.T, zdir='z', offset=25, cmap=cm.coolwarm)
+#ax.scatter3D(x_all[:,0], x_all[:,1], np.full((1,N_turb),25),'+k', s=4)
+plt.pcolormesh(xv, yv, u_eval.T)
+#plt.axis("tight")
+plt.axis("equal")
+plt.show()
+
+#================================================================================================== ADDED EJ END
 
 
-plt.colorbar(surf, shrink=0.5) # an example
-
-fig.colorbar(surf)
-ax.set_xlabel('X')
-ax.set_ylabel('Y')
-ax.set_title('Wind speed, initial conf.')
-ax.azim = -90
-#ax.dist = 10
-ax.elev = 90
+if False:
 
 
-for wind_dir in wind_dirs:
-
-    obj_fun = functools.partial(objective_fun, U=U,wind_dir=wind_dir, R0=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, C_p=C_p)
-
-    res = minimize(obj_fun, x_vector, method='BFGS', jac=True, options={'disp': True}, constraints=None)
 
 
-    print("Initial turbine locations: ", x_vector)
-    print("New turbine locations: ", res.x)
-    
+    constr = LinearConstraint(np.identity(2*N_turb), x_vector-50, x_vector+50 )
+
+    wind_dirs = np.array([0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75])*np.pi + 1e-2
+
+    # Visualize wind field due to wake effects
+    N_x = 150
+    N_y = 600
+    x_grid = np.linspace(-100,100,N_x)
+    y_grid = np.linspace(-200,500,N_y)
+
+    #x_grid = np.linspace(-50,100,N_x)
+    #y_grid = np.linspace(-50,300,N_y)
+
+    u_eval = np.zeros((N_x, N_y))
+    delta_u_eval = np.zeros((N_turb, N_x, N_y))
+
+    u_eval_optim = np.zeros((N_x, N_y))
+    delta_u_eval_optim = np.zeros((N_turb, N_x, N_y))
+
+
     for ix in range(N_x):
         for iy in range(N_y):
             x_i = (x_grid[ix], y_grid[iy])
 
+            u_eval[ix,iy], temp = wind_speed_due_to_wake(x_i, x_all, U, wind_dir, D, r_i = 0, theta_i = 0)
+            delta_u_eval[:,ix,iy] = temp.flatten()
+
+    fig = plt.figure(constrained_layout=True)
+
+    (xv, yv) = np.meshgrid(x_grid, y_grid)
+    ax = fig.add_subplot(111, projection='3d')
+    surf = ax.plot_surface(xv, yv, u_eval.T, cmap=plt.cm.coolwarm)
+    cset = ax.contourf(xv, yv, u_eval.T, zdir='z', offset=25, cmap=cm.coolwarm)
+    ax.scatter3D(x_all[:,0], x_all[:,1], np.full((1,N_turb),25),'+k', s=4)
+
+
+    plt.colorbar(surf, shrink=0.5) # an example
+
+    fig.colorbar(surf)
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_title('Wind speed, initial conf.')
+    ax.azim = -90
+    #ax.dist = 10
+    ax.elev = 90
+
+
+    for wind_dir in wind_dirs:
+
+        obj_fun = functools.partial(objective_fun, U=U,wind_dir=wind_dir, R0=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, C_p=C_p)
+
+        res = minimize(obj_fun, x_vector, method='BFGS', jac=True, options={'disp': True}, constraints=None)
+
+
+        print("Initial turbine locations: ", x_vector)
+        print("New turbine locations: ", res.x)
+        
+        for ix in range(N_x):
+            for iy in range(N_y):
+                x_i = (x_grid[ix], y_grid[iy])
+
+                u_eval_optim[ix,iy], temp = wind_speed_due_to_wake(x_i, np.reshape(res.x, (N_turb,2)), U, wind_dir, D, r_i = 0, theta_i = 0)
+                delta_u_eval_optim[:,ix,iy] = temp.flatten()
+    
+        fig = plt.figure(constrained_layout=False)
+        (xv, yv) = np.meshgrid(x_grid, y_grid)
+        ax = fig.add_subplot(111, projection='3d')
+        surf = ax.plot_surface(xv, yv, u_eval_optim.T, cmap=plt.cm.coolwarm)
+        cset = ax.contourf(xv, yv, u_eval_optim.T, zdir='z', offset=25, cmap=cm.coolwarm)
+        #ax.scatter3D(res.x[0::2], res.x[1::2], np.full((1,N_turb),25),'k+', s=4)
+
+        #im = ax.imshow(np.arange(200).reshape((20, 10)))
+        #plt.colorbar(im,fraction=0.046, pad=0.04)
+
+        #plt.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
+        #plt.tight_layout()
+
+        ###ax._axis3don = False
+
+        fig.colorbar(surf)
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_title('Wind speed, opt. locations')
+        ax.azim = -90
+        #ax.dist = 10
+        ax.elev = 90
+
+    plt.show()
+        
+    exit(1)
+    #P,g = obj_fun(x_vector)
+    #print("Objective function with partial arguments, P: ", P)
+    #print("Gradients: ", g)
+    # Unconstrained optimization
+    res = minimize(obj_fun, x_vector, method='BFGS', jac=True, options={'disp': True}, constraints=None)
+    #res = minimize(obj_fun, x_vector, method='Nelder-Mead', options={'disp': True}, constraints=None)
+    # Constrained optimization
+    #res = minimize(obj_fun, x_vector, method='SLSQP', jac=True, options={'disp': True}, constraints=constr)
+
+
+    print("New turbine locations: ", res.x)
+    #res = minimize(obj_fun, x_all, method='BFGS', jac=True, options={'disp': True})
+
+    P_new,g_new = obj_fun(res.x)
+    #P_new = obj_fun(res.x)
+    print("Updated objective, P: ", P_new)
+
+
+    # Visualize wind field due to wake effects
+    N_x = 150
+    N_y = 600
+    x_grid = np.linspace(-100,100,N_x)
+    y_grid = np.linspace(-200,500,N_y)
+
+    #x_grid = np.linspace(-50,100,N_x)
+    #y_grid = np.linspace(-50,300,N_y)
+
+    u_eval = np.zeros((N_x, N_y))
+    delta_u_eval = np.zeros((N_turb, N_x, N_y))
+
+    u_eval_optim = np.zeros((N_x, N_y))
+    delta_u_eval_optim = np.zeros((N_turb, N_x, N_y))
+
+    for ix in range(N_x):
+        for iy in range(N_y):
+            x_i = (x_grid[ix], y_grid[iy])
+
+            u_eval[ix,iy], temp = wind_speed_due_to_wake(x_i, x_all, U, wind_dir, D, r_i = 0, theta_i = 0)
+            delta_u_eval[:,ix,iy] = temp.flatten()
+            
             u_eval_optim[ix,iy], temp = wind_speed_due_to_wake(x_i, np.reshape(res.x, (N_turb,2)), U, wind_dir, D, r_i = 0, theta_i = 0)
             delta_u_eval_optim[:,ix,iy] = temp.flatten()
- 
+    
+    #fig = plt.figure(constrained_layout=False)
+    fig, ax = plt.subplots(constrained_layout=False)
+    (xv, yv) = np.meshgrid(x_grid, y_grid)
+    plt.imshow(u_eval_optim.T, cmap=cm.coolwarm)
+    plt.tight_layout()
+    
+    
+    fig = plt.figure(constrained_layout=True)
+
+    (xv, yv) = np.meshgrid(x_grid, y_grid)
+    ax = fig.add_subplot(111, projection='3d')
+    surf = ax.plot_surface(xv, yv, u_eval.T, cmap=plt.cm.coolwarm)
+    cset = ax.contourf(xv, yv, u_eval.T, zdir='z', offset=25, cmap=cm.coolwarm)
+    ax.scatter3D(x_all[:,0], x_all[:,1], np.full((1,N_turb),25),'+k', s=4)
+
+    ###ax._axis3don = False
+
+    plt.colorbar(surf, shrink=0.5) # an example
+
+    fig.colorbar(surf)
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_title('Wind speed, initial conf.')
+    ax.azim = -90
+    #ax.dist = 10
+    ax.elev = 90
+
+        
     fig = plt.figure(constrained_layout=False)
     (xv, yv) = np.meshgrid(x_grid, y_grid)
     ax = fig.add_subplot(111, projection='3d')
@@ -501,142 +665,45 @@ for wind_dir in wind_dirs:
     #ax.dist = 10
     ax.elev = 90
 
-plt.show()
-    
-exit(1)
-#P,g = obj_fun(x_vector)
-#print("Objective function with partial arguments, P: ", P)
-#print("Gradients: ", g)
-# Unconstrained optimization
-res = minimize(obj_fun, x_vector, method='BFGS', jac=True, options={'disp': True}, constraints=None)
-#res = minimize(obj_fun, x_vector, method='Nelder-Mead', options={'disp': True}, constraints=None)
-# Constrained optimization
-#res = minimize(obj_fun, x_vector, method='SLSQP', jac=True, options={'disp': True}, constraints=constr)
+    #cset = ax.contourf(xv, yv, u_eval_optim.T, cmap=cm.coolwarm)
 
 
-print("New turbine locations: ", res.x)
-#res = minimize(obj_fun, x_all, method='BFGS', jac=True, options={'disp': True})
 
-P_new,g_new = obj_fun(res.x)
-#P_new = obj_fun(res.x)
-print("Updated objective, P: ", P_new)
+    """
+    for j in range(N_turb):
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        surf = ax.plot_surface(xv, yv, delta_u_eval[j,:,:].T, cmap=plt.cm.coolwarm)
 
-
-# Visualize wind field due to wake effects
-N_x = 150
-N_y = 600
-x_grid = np.linspace(-100,100,N_x)
-y_grid = np.linspace(-200,500,N_y)
-
-#x_grid = np.linspace(-50,100,N_x)
-#y_grid = np.linspace(-50,300,N_y)
-
-u_eval = np.zeros((N_x, N_y))
-delta_u_eval = np.zeros((N_turb, N_x, N_y))
-
-u_eval_optim = np.zeros((N_x, N_y))
-delta_u_eval_optim = np.zeros((N_turb, N_x, N_y))
-
-for ix in range(N_x):
-    for iy in range(N_y):
-        x_i = (x_grid[ix], y_grid[iy])
-
-        u_eval[ix,iy], temp = wind_speed_due_to_wake(x_i, x_all, U, wind_dir, D, r_i = 0, theta_i = 0)
-        delta_u_eval[:,ix,iy] = temp.flatten()
+        fig.colorbar(surf)
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Wind speed reduction factor')
         
-        u_eval_optim[ix,iy], temp = wind_speed_due_to_wake(x_i, np.reshape(res.x, (N_turb,2)), U, wind_dir, D, r_i = 0, theta_i = 0)
-        delta_u_eval_optim[:,ix,iy] = temp.flatten()
- 
-#fig = plt.figure(constrained_layout=False)
-fig, ax = plt.subplots(constrained_layout=False)
-(xv, yv) = np.meshgrid(x_grid, y_grid)
-plt.imshow(u_eval_optim.T, cmap=cm.coolwarm)
-plt.tight_layout()
- 
- 
-fig = plt.figure(constrained_layout=True)
 
-(xv, yv) = np.meshgrid(x_grid, y_grid)
-ax = fig.add_subplot(111, projection='3d')
-surf = ax.plot_surface(xv, yv, u_eval.T, cmap=plt.cm.coolwarm)
-cset = ax.contourf(xv, yv, u_eval.T, zdir='z', offset=25, cmap=cm.coolwarm)
-ax.scatter3D(x_all[:,0], x_all[:,1], np.full((1,N_turb),25),'+k', s=4)
+    for j in range(N_turb):
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        surf = ax.plot_surface(xv, yv, delta_u_eval_optim[j,:,:].T, cmap=plt.cm.coolwarm)
 
-###ax._axis3don = False
+        fig.colorbar(surf)
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Wind speed reduction factor, optimized')
+    """
 
-plt.colorbar(surf, shrink=0.5) # an example
-
-fig.colorbar(surf)
-ax.set_xlabel('X')
-ax.set_ylabel('Y')
-ax.set_title('Wind speed, initial conf.')
-ax.azim = -90
-#ax.dist = 10
-ax.elev = 90
-
-    
-fig = plt.figure(constrained_layout=False)
-(xv, yv) = np.meshgrid(x_grid, y_grid)
-ax = fig.add_subplot(111, projection='3d')
-surf = ax.plot_surface(xv, yv, u_eval_optim.T, cmap=plt.cm.coolwarm)
-cset = ax.contourf(xv, yv, u_eval_optim.T, zdir='z', offset=25, cmap=cm.coolwarm)
-#ax.scatter3D(res.x[0::2], res.x[1::2], np.full((1,N_turb),25),'k+', s=4)
-
-#im = ax.imshow(np.arange(200).reshape((20, 10)))
-#plt.colorbar(im,fraction=0.046, pad=0.04)
-
-#plt.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
-#plt.tight_layout()
-
-###ax._axis3don = False
-
-fig.colorbar(surf)
-ax.set_xlabel('X')
-ax.set_ylabel('Y')
-ax.set_title('Wind speed, opt. locations')
-ax.azim = -90
-#ax.dist = 10
-ax.elev = 90
-
-#cset = ax.contourf(xv, yv, u_eval_optim.T, cmap=cm.coolwarm)
+    plt.show()
 
 
+    # Compute power production for all turbines:
 
-"""
-for j in range(N_turb):
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    surf = ax.plot_surface(xv, yv, delta_u_eval[j,:,:].T, cmap=plt.cm.coolwarm)
-
-    fig.colorbar(surf)
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Wind speed reduction factor')
-    
-
-for j in range(N_turb):
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    surf = ax.plot_surface(xv, yv, delta_u_eval_optim[j,:,:].T, cmap=plt.cm.coolwarm)
-
-    fig.colorbar(surf)
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Wind speed reduction factor, optimized')
-"""
-
-plt.show()
-
-
-# Compute power production for all turbines:
-
-power = np.zeros((N_turb,1))
-u_at_turbines = np.zeros((N_turb,1))
-for j in range(N_turb):
-    # Averaged speed over the disc centered at site j
-    u_at_turbines[j], temp = averaged_wind_speed(x_all[j,:], x_all, U, wind_dir, D, R0[j])
-    power[j] = power_ind_turbine(u_at_turbines[j], U_cut_in, U_cut_out, C_p, rho, R0[j])
-    print("Power of turbine ", j, ": ", power[j])
-    
+    power = np.zeros((N_turb,1))
+    u_at_turbines = np.zeros((N_turb,1))
+    for j in range(N_turb):
+        # Averaged speed over the disc centered at site j
+        u_at_turbines[j], temp = averaged_wind_speed(x_all[j,:], x_all, U, wind_dir, D, R0[j])
+        power[j] = power_ind_turbine(u_at_turbines[j], U_cut_in, U_cut_out, C_p, rho, R0[j])
+        print("Power of turbine ", j, ": ", power[j])
+        
 
 
