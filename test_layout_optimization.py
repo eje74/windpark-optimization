@@ -349,8 +349,40 @@ def objective_fun(x_vector, U, wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_
     
     return -P, -g
     #return delta_u_ij
+
+def calc_total_P(x_vector, U, wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_p):
+    #print("Checking x_vector: ", np.shape(x_vector))
+    #    np.atleast_1d(
+    N_turb = int(np.shape(x_vector)[0]/2)
+    x_all = np.reshape(x_vector, (N_turb, 2))
+    D = 2*R0
+    #N_turb, temp = np.shape(x_all)
+                    
+    # Averaged wind and deficit factors
+    delta_u_ij = np.zeros((N_turb, N_turb))
+    u_i = np.zeros((N_turb,1))
+    p_i = np.zeros((N_turb,1))
         
+    for i in range(N_turb):
+        x_i = x_all[i,:]
+        u_i, delta_uij_temp = averaged_wind_speed(x_i, x_all, U, wind_dir, D, R0[i])
+        delta_u_ij[i,:] = delta_uij_temp.T
+    
+        p_i[i] = power_ind_turbine(u_i, U_cut_in, U_cut_out, C_p, rho, R0[i])
+        
+    return -np.sum(p_i)
+
 def partial_fun(fun, x, fun_param, dl=0.1):
+    """
+    Calculates the partial derivatives of the function 'fun' at point 'x', of the variables 'x'
+    Args:
+        fun       : is a function taking the arguments (x, *fun_param)
+        x         : the point where the partial derivative is evaluated. (assumin a 1-D ndarray)
+        fun_param : the rest of 'fun''s arguments. (assumin a tuple)
+        dl        : the size of variation used to calculate the partial derivativs. (default = 0.1)
+    Output:
+        dP : list of partial derivative, with the same ordering as the 'x' array. (1-D ndarray)
+    """
     dP = np.zeros(len(x))
     dx = np.zeros(x.shape)
     for i in np.arange(len(x)):
@@ -361,6 +393,29 @@ def partial_fun(fun, x, fun_param, dl=0.1):
         dx[i] = 0
     return dP
 
+def calc_partial(fun, x, fun_param, dl=0.1):
+    """
+    Calculates the partial derivatives of the function 'fun' at point 'x', of the variables 'x'
+    Args:
+        fun       : is a function taking the arguments (x, *fun_param)
+        x         : the point where the partial derivative is evaluated. (assumin a 1-D ndarray)
+        fun_param : the rest of 'fun''s arguments. (assumin a tuple)
+        dl        : the size of variation used to calculate the partial derivativs. (default = 0.1)
+    Output:
+        dP : list of partial derivative, with the same ordering as the 'x' array. (1-D ndarray)
+    """
+    dP = np.zeros(len(x))
+    dx = np.zeros(x.shape)
+    dl_inv = 0.5/dl
+    for i in np.arange(len(x)):
+        dx[i] = dl
+        dP[i] = (fun(x+dx, *fun_param) - fun(x-dx, *fun_param))*dl_inv
+        dx[i] = 0
+    return dP
+
+def objective_fun_num(x_vector, U, wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_p):
+    fun_param = U, wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_p
+    return calc_total_P(x_vector, *fun_param), calc_partial(calc_total_P, x_vector, fun_param)
 
 
 # Main program
@@ -433,49 +488,57 @@ fun_param = U,wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_p
 #P, dP = objective_fun(x_vector, U,wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_p)
 
 P, dP = objective_fun(x_vector, *fun_param)
+P_new, dP_new = objective_fun_num(x_vector, *fun_param)
+
+print("dP is of type: ", end=" ")
+print(type(dP), end=" ")
+print(dP.shape)
+
 
 dP_num = partial_fun(objective_fun, x_vector, fun_param)
+#P_new = calc_total_P(x_vector, *fun_param)
+#dP_new = calc_partial(calc_total_P, x_vector, fun_param)
 
-print(P, dP, dP_num)
-
-
-# Print wind field
-N_x = 150
-N_y = 600
-x_grid = np.linspace(-100,100,N_x)
-y_grid = np.linspace(-200,500,N_y)
-
-#x_grid = np.linspace(-50,100,N_x)
-#y_grid = np.linspace(-50,300,N_y)
-
-u_eval = np.zeros((N_x, N_y))
-delta_u_eval = np.zeros((N_turb, N_x, N_y))
-
-u_eval_optim = np.zeros((N_x, N_y))
-delta_u_eval_optim = np.zeros((N_turb, N_x, N_y))
+print(P, P_new, dP, dP_num, dP_new)
 
 
-for ix in range(N_x):
-    for iy in range(N_y):
-        x_i = (x_grid[ix], y_grid[iy])
+# # Print wind field
+# N_x = 150
+# N_y = 600
+# x_grid = np.linspace(-100,100,N_x)
+# y_grid = np.linspace(-200,500,N_y)
 
-        u_eval[ix,iy], temp = wind_speed_due_to_wake(x_i, x_all, U, wind_dir, D, r_i = 0, theta_i = 0)
-        delta_u_eval[:,ix,iy] = temp.flatten()
+# #x_grid = np.linspace(-50,100,N_x)
+# #y_grid = np.linspace(-50,300,N_y)
 
-fig = plt.figure(constrained_layout=True)
+# u_eval = np.zeros((N_x, N_y))
+# delta_u_eval = np.zeros((N_turb, N_x, N_y))
 
-(xv, yv) = np.meshgrid(x_grid, y_grid)
-#ax = fig.add_subplot(111, projection='3d')
-#surf = ax.plot_surface(xv, yv, u_eval.T, cmap=plt.cm.coolwarm)
-#cset = ax.contourf(xv, yv, u_eval.T, zdir='z', offset=25, cmap=cm.coolwarm)
-#ax.scatter3D(x_all[:,0], x_all[:,1], np.full((1,N_turb),25),'+k', s=4)
-plt.pcolormesh(xv, yv, u_eval.T)
-#plt.axis("tight")
-plt.axis("equal")
-plt.show()
+# u_eval_optim = np.zeros((N_x, N_y))
+# delta_u_eval_optim = np.zeros((N_turb, N_x, N_y))
 
 
-if False:
+# for ix in range(N_x):
+#     for iy in range(N_y):
+#         x_i = (x_grid[ix], y_grid[iy])
+
+#         u_eval[ix,iy], temp = wind_speed_due_to_wake(x_i, x_all, U, wind_dir, D, r_i = 0, theta_i = 0)
+#         delta_u_eval[:,ix,iy] = temp.flatten()
+
+# fig = plt.figure(constrained_layout=True)
+
+# (xv, yv) = np.meshgrid(x_grid, y_grid)
+# #ax = fig.add_subplot(111, projection='3d')
+# #surf = ax.plot_surface(xv, yv, u_eval.T, cmap=plt.cm.coolwarm)
+# #cset = ax.contourf(xv, yv, u_eval.T, zdir='z', offset=25, cmap=cm.coolwarm)
+# #ax.scatter3D(x_all[:,0], x_all[:,1], np.full((1,N_turb),25),'+k', s=4)
+# plt.pcolormesh(xv, yv, u_eval.T)
+# #plt.axis("tight")
+# plt.axis("equal")
+# plt.show()
+
+
+if True:
 #================================================================================================== ADDED EJ END
 
 
@@ -530,7 +593,7 @@ if False:
 
     for wind_dir in wind_dirs:
 
-        obj_fun = functools.partial(objective_fun, U=U,wind_dir=wind_dir, R0=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, C_p=C_p)
+        obj_fun = functools.partial(objective_fun_num, U=U,wind_dir=wind_dir, R0=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, C_p=C_p)
 
         res = minimize(obj_fun, x_vector, method='BFGS', jac=True, options={'disp': True}, constraints=None)
 
