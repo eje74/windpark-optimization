@@ -352,12 +352,13 @@ def objective_fun(x_vector, U, wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_
         
 def partial_fun(fun, x, fun_param, dl=0.1):
     dP = np.zeros(len(x))
+    dx = np.zeros(x.shape)
     for i in np.arange(len(x)):
-        dx = np.zeros(x.shape)
         dx[i] = dl
         fun_p, g_tmp = fun(x+dx, *fun_param)
         fun_n, g_tmp = fun(x-dx, *fun_param)
         dP[i] = (fun_p - fun_n)/(2*dl)
+        dx[i] = 0
     return dP
 
 
@@ -473,10 +474,9 @@ plt.pcolormesh(xv, yv, u_eval.T)
 plt.axis("equal")
 plt.show()
 
-#================================================================================================== ADDED EJ END
-
 
 if False:
+#================================================================================================== ADDED EJ END
 
 
 
