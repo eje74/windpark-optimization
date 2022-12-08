@@ -2,7 +2,19 @@
 """
 Implemented:
     - Continuous wake model
-    - 
+    -     
+"""
+
+##################################################################################### NOTES 
+"""
+1/12-22: 'power_ind_turbine': error in the implementation of power calculation for U > U_cut_out:
+              U = U_cut_out see Eq.(3) in [1]
+              Also an error in U_cut_in < U < U_cut_out case
+              
+
+          
+Refs:
+[1] J.Partk , K.H. Law/Applied Energy 151 (2015)
 """
 
 import matplotlib.pyplot as plt
@@ -30,7 +42,7 @@ def power_ind_turbine(U, U_cut_in, U_cut_out, C_p, rho, R0):
     if U < U_cut_in:
         Power = 0
     elif U > U_cut_out:
-        Power = 0.5*rho*A*C_p *U_cut_out*U**3
+        Power = -0.5*rho*A*C_p*U_cut_out**3
     else:
         Power = 0.5*rho*A*C_p*U**3
         
@@ -538,12 +550,8 @@ print(P, P_new, dP, dP_num, dP_new)
 # plt.show()
 
 
-if True:
+if False:
 #================================================================================================== ADDED EJ END
-
-
-
-
     constr = LinearConstraint(np.identity(2*N_turb), x_vector-50, x_vector+50 )
 
     wind_dirs = np.array([0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75])*np.pi + 1e-2
@@ -567,7 +575,6 @@ if True:
     for ix in range(N_x):
         for iy in range(N_y):
             x_i = (x_grid[ix], y_grid[iy])
-
             u_eval[ix,iy], temp = wind_speed_due_to_wake(x_i, x_all, U, wind_dir, D, r_i = 0, theta_i = 0)
             delta_u_eval[:,ix,iy] = temp.flatten()
 
