@@ -16,6 +16,8 @@ Implemented:
 Refs:
 [1] J.Partk , K.H. Law/Applied Energy 151 (2015)
 """
+#====================================================================================
+
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -24,6 +26,85 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy.optimize import minimize, LinearConstraint
 import functools
 from matplotlib import cm
+
+
+######################################################################################## Decorators 
+# -------------------------------------------------------------------------------------- cost function decor
+def rectangular_area(xlim, ylim):
+    """
+    Decorator that adds a cost for transgressing a predescribed rectangular area
+    Args:
+        xlim: [x_min, x_max], where x_min and x_max are the boundaries of the  
+            rectangle in the x-direction
+        ylim: [y_min, y_max], where y_min and y_max are the boundaries of the  
+            rectangle in the y-direction
+    Out:
+        Adds a penalty for going outside the prescribed rectangular domain. 
+        The "severity" of the penalty is given by beta.
+    """
+    beta = 0.1
+    def rectangular_area_inner(func):
+        def wrapper(*args, **kwargs):
+            x_min, x_max = xlim[0], xlim[1]
+            y_min, y_max = ylim[0], ylim[1]
+            penalty = 0.0
+            for i in np.arange(0, x_vector.size, 2):
+                x, y = x_vector[i], x_vector[i+1]
+                if x < x_min:
+                    penalty += np.exp(beta*(x_min-x)**2)-1
+                elif x > x_max:
+                    penalty += np.exp(beta*(x-x_max)**2)-1
+                if y < y_min:
+                    penalty += np.exp(beta*(y_min-y)**2)-1
+                elif y > y_max:
+                    penalty += np.exp(beta*(y-y_max)**2)-1
+            return (1 - penalty)*func(*args, **kwargs)
+        return wrapper
+    return rectangular_area_inner
+
+######################################################################################## 
+
+
+def print_wind_field(x_all, U, wind_dir, D, plot_title="wind speed"):
+    N_x = 240
+    N_y = 240
+    x_grid = np.linspace(-120,120,N_x)
+    y_grid = np.linspace(-120,120,N_y)
+
+    #x_grid = np.linspace(-50,100,N_x)
+    #y_grid = np.linspace(-50,300,N_y)
+
+    u_eval = np.zeros((N_x, N_y))
+    delta_u_eval = np.zeros((N_turb, N_x, N_y))
+
+    u_eval_optim = np.zeros((N_x, N_y))
+    delta_u_eval_optim = np.zeros((N_turb, N_x, N_y))
+
+
+    for ix in range(N_x):
+        for iy in range(N_y):
+            x_i = (x_grid[ix], y_grid[iy])
+            u_eval[ix,iy], temp = wind_speed_due_to_wake(x_i, x_all, U, wind_dir, D, r_i = 0, theta_i = 0)
+            delta_u_eval[:,ix,iy] = temp.flatten()
+
+    fig = plt.figure(constrained_layout=True)
+
+    (xv, yv) = np.meshgrid(x_grid, y_grid)
+    ax = fig.add_subplot(111, projection='3d')
+    surf = ax.plot_surface(xv, yv, u_eval.T, cmap=plt.cm.coolwarm)
+    cset = ax.contourf(xv, yv, u_eval.T, zdir='z', offset=25, cmap=cm.coolwarm)
+    ax.scatter3D(x_all[:,0], x_all[:,1], np.full((1,N_turb),25),'+k', s=4)
+
+
+    plt.colorbar(surf, shrink=0.5) # an example
+
+    fig.colorbar(surf)
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_title(plot_title)
+    ax.azim = -90
+    #ax.dist = 10
+    ax.elev = 90    
 
 def power_ind_turbine(U, U_cut_in, U_cut_out, C_p, rho, R0):
     """
@@ -42,7 +123,7 @@ def power_ind_turbine(U, U_cut_in, U_cut_out, C_p, rho, R0):
     if U < U_cut_in:
         Power = 0
     elif U > U_cut_out:
-        Power = -0.5*rho*A*C_p*U_cut_out**3
+        Power = 0.5*rho*A*C_p*U_cut_out**3
     else:
         Power = 0.5*rho*A*C_p*U**3
         
@@ -97,8 +178,7 @@ def wind_speed_due_to_wake(x_i, x_all, U, wind_dir, D, r_i, theta_i):
     #    u_ij = U
     
     return u_i, delta_u_i
-        
-    
+
 def wake_model_continuous(d, r, alpha, D, averaged=False):
     
     # Linear wake expansion
@@ -162,206 +242,207 @@ def averaged_wind_speed(x_i, x_all, U, wind_dir, D, R0):
     
     return u_averaged, delta_u_averaged
     
-def objective_fun(x_vector, U, wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_p):
-    """
-    Compute objective function and its gradient
+# def objective_fun(x_vector, U, wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_p):
+#     """
+#     Compute objective function and its gradient
     
-    Args:
-        x_all: locations of all turbines
-        U: ambient wind speed
-        wind_dir: wind direction
-        R0: rotor radius of turbines
+#     Args:
+#         x_all: locations of all turbines
+#         U: ambient wind speed
+#         wind_dir: wind direction
+#         R0: rotor radius of turbines
         
-    Output:
-        P: objective function: total power production
-        g: gradient of P w.r.t. spatial coordinates of all turbines
-    """
+#     Output:
+#         P: objective function: total power production
+#         g: gradient of P w.r.t. spatial coordinates of all turbines
+#     """
     
-    #print("Checking x_vector: ", np.shape(x_vector))
-    #    np.atleast_1d(
-    N_turb = int(np.shape(x_vector)[0]/2)
-    x_all = np.reshape(x_vector, (N_turb, 2))
-    D = 2*R0
-    #N_turb, temp = np.shape(x_all)
+#     #print("Checking x_vector: ", np.shape(x_vector))
+#     #    np.atleast_1d(
+#     N_turb = int(np.shape(x_vector)[0]/2)
+#     x_all = np.reshape(x_vector, (N_turb, 2))
+#     D = 2*R0
+#     #N_turb, temp = np.shape(x_all)
     
     
-    Partial_u_i_Partial_x_q = np.zeros((N_turb,N_turb))
-    Partial_u_i_Partial_y_q = np.zeros((N_turb,N_turb))
+#     Partial_u_i_Partial_x_q = np.zeros((N_turb,N_turb))
+#     Partial_u_i_Partial_y_q = np.zeros((N_turb,N_turb))
                     
-    # Averaged wind and deficit factors
-    delta_u_ij = np.zeros((N_turb, N_turb))
-    u_i = np.zeros((N_turb,1))
-    p_i = np.zeros((N_turb,1))
+#     # Averaged wind and deficit factors
+#     delta_u_ij = np.zeros((N_turb, N_turb))
+#     u_i = np.zeros((N_turb,1))
+#     p_i = np.zeros((N_turb,1))
         
-    for i in range(N_turb):
-        x_i = x_all[i,:]
-        u_i, delta_uij_temp = averaged_wind_speed(x_i, x_all, U, wind_dir, D, R0[i])
-        delta_u_ij[i,:] = delta_uij_temp.T
+#     for i in range(N_turb):
+#         x_i = x_all[i,:]
+#         u_i, delta_uij_temp = averaged_wind_speed(x_i, x_all, U, wind_dir, D, R0[i])
+#         delta_u_ij[i,:] = delta_uij_temp.T
     
-        #delta_u_ij[i,i] = 1e-5
+#         #delta_u_ij[i,i] = 1e-5
     
-        p_i[i] = power_ind_turbine(u_i, U_cut_in, U_cut_out, C_p, rho, R0[i])
+#         p_i[i] = power_ind_turbine(u_i, U_cut_in, U_cut_out, C_p, rho, R0[i])
         
-    P = np.sum(p_i)
+#     P = np.sum(p_i)
     
-    #print("delta_u_ij: ", delta_u_ij)
+#     #print("delta_u_ij: ", delta_u_ij)
     
-    # First factor of current (3):
-    Partial_u_i_Partial_delta_u_ik = np.zeros((N_turb,N_turb))
-    for i in range(N_turb):
-        for k in range(N_turb):
-            if k != i:
-                if abs(delta_u_ij[i,k]) > 1e-6:
-                    Partial_u_i_Partial_delta_u_ik[i,k] = -U*np.reciprocal(np.sqrt(np.sum(np.square(delta_u_ij[i,:]))))*delta_u_ij[i,k]
-                    #Partial_u_i_Partial_delta_u_ik[i,k] = -U*np.reciprocal(np.sqrt(np.sum(np.square(delta_u_ij[:,i]))))*delta_u_ij[k,i]
+#     # First factor of current (3):
+#     Partial_u_i_Partial_delta_u_ik = np.zeros((N_turb,N_turb))
+#     for i in range(N_turb):
+#         for k in range(N_turb):
+#             if k != i:
+#                 if abs(delta_u_ij[i,k]) > 1e-6:
+#                     Partial_u_i_Partial_delta_u_ik[i,k] = -U*np.reciprocal(np.sqrt(np.sum(np.square(delta_u_ij[i,:]))))*delta_u_ij[i,k]
+#                     #Partial_u_i_Partial_delta_u_ik[i,k] = -U*np.reciprocal(np.sqrt(np.sum(np.square(delta_u_ij[:,i]))))*delta_u_ij[k,i]
                                 
-                    #print("Partial_u_i_Partial_delta_u_ik[i,k]: ", Partial_u_i_Partial_delta_u_ik[i,k])
+#                     #print("Partial_u_i_Partial_delta_u_ik[i,k]: ", Partial_u_i_Partial_delta_u_ik[i,k])
     
-    # Second factor of current (3):
-    Partial_delta_u_ik_Partial_x_q = np.zeros((N_turb,N_turb,N_turb))
-    Partial_delta_u_ik_Partial_y_q = np.zeros((N_turb,N_turb,N_turb))
+#     # Second factor of current (3):
+#     Partial_delta_u_ik_Partial_x_q = np.zeros((N_turb,N_turb,N_turb))
+#     Partial_delta_u_ik_Partial_y_q = np.zeros((N_turb,N_turb,N_turb))
     
         
     
     
-    # du_ik/dq
-    #Partial_delta_u_ik_Partial_q = np.zeros((N_turb, N_turb, N_turb))
+#     # du_ik/dq
+#     #Partial_delta_u_ik_Partial_q = np.zeros((N_turb, N_turb, N_turb))
     
-    # Discretization of radius and angle for wind speed numerical integration over the rotor swept area (assumed circular)
-    theta_min, theta_max, n_points_theta = (0, 2*np.pi, 30)
-    r_min, n_points_r = (1e-2, 20)
-    #r_min, r_max, n_points_r = (0, R0, 20)
+#     # Discretization of radius and angle for wind speed numerical integration over the rotor swept area (assumed circular)
+#     theta_min, theta_max, n_points_theta = (0, 2*np.pi, 30)
+#     r_min, n_points_r = (1e-2, 20)
+#     #r_min, r_max, n_points_r = (0, R0, 20)
     
-    theta_i = np.linspace(theta_min, theta_max, n_points_theta)
-    #r_i = np.linspace(r_min, r_max, n_points_r)
+#     theta_i = np.linspace(theta_min, theta_max, n_points_theta)
+#     #r_i = np.linspace(r_min, r_max, n_points_r)
 
     
-    Partial_delta_u_Partial_d = np.zeros((N_turb, n_points_theta, n_points_r))
-    # First case, second factor D delta_u_ik/ D x_i, q=i
-    for i in range(N_turb):
-        x_i = x_all[i,:]
-        r_max = R0[i]
-        r_i = np.linspace(r_min, r_max, n_points_r)
-        for k in range(N_turb):
-            if k != i:
-                x_k = x_all[k,:]
-                theta_ik = np.arctan2((x_i[0]-x_k[0]),(x_i[1]-x_k[1]))
+#     Partial_delta_u_Partial_d = np.zeros((N_turb, n_points_theta, n_points_r))
+#     # First case, second factor D delta_u_ik/ D x_i, q=i
+#     for i in range(N_turb):
+#         x_i = x_all[i,:]
+#         r_max = R0[i]
+#         r_i = np.linspace(r_min, r_max, n_points_r)
+#         for k in range(N_turb):
+#             if k != i:
+#                 x_k = x_all[k,:]
+#                 theta_ik = np.arctan2((x_i[0]-x_k[0]),(x_i[1]-x_k[1]))
     
-                Eucl_dist = np.sqrt((x_i[0]-x_k[0])**2 + (x_i[1]-x_k[1])**2)
-                downstream_dist_ik = Eucl_dist*np.cos(abs(theta_ik - wind_dir))
-                radial_dist_ik =  Eucl_dist*np.sin(abs(theta_ik - wind_dir))
+#                 Eucl_dist = np.sqrt((x_i[0]-x_k[0])**2 + (x_i[1]-x_k[1])**2)
+#                 downstream_dist_ik = Eucl_dist*np.cos(abs(theta_ik - wind_dir))
+#                 radial_dist_ik =  Eucl_dist*np.sin(abs(theta_ik - wind_dir))
                 
 
-                r = np.sqrt((radial_dist_ik - np.outer(np.cos(theta_i), r_i) )**2 + (np.outer(np.sin(theta_i), r_i))**2)
-                d = downstream_dist_ik
+#                 r = np.sqrt((radial_dist_ik - np.outer(np.cos(theta_i), r_i) )**2 + (np.outer(np.sin(theta_i), r_i))**2)
+#                 d = downstream_dist_ik
         
                 
-                # Index k represents the turbine whose effect on turbine i is quantified, hence it should be R0[k] below [???? DOUBLE-CHECK!]
-                _, Partial_delta_u_Partial_d, Partial_delta_u_Partial_r = wake_model_continuous(d, r, alpha, 2*R0[k])
+#                 # Index k represents the turbine whose effect on turbine i is quantified, hence it should be R0[k] below [???? DOUBLE-CHECK!]
+#                 _, Partial_delta_u_Partial_d, Partial_delta_u_Partial_r = wake_model_continuous(d, r, alpha, 2*R0[k])
                 
                 
-                # Scalar expressions
-                #Partial_d_Partial_x_i = ((x_i[1]-x_k[1])*np.sin(abs(wind_dir - theta_ik)) + (x_i[0]-x_k[0])*np.cos(abs(wind_dir - theta_ik)))/Eucl_dist
-                Partial_d_Partial_x_i = np.sin(wind_dir) * np.sign(x_i[1]-x_k[1])
+#                 # Scalar expressions
+#                 #Partial_d_Partial_x_i = ((x_i[1]-x_k[1])*np.sin(abs(wind_dir - theta_ik)) + (x_i[0]-x_k[0])*np.cos(abs(wind_dir - theta_ik)))/Eucl_dist
+#                 Partial_d_Partial_x_i = np.sin(wind_dir) * np.sign(x_i[1]-x_k[1])
                 
-                #Partial_d_Partial_y_i = (-(x_i[0]-x_k[0])*np.sin(abs(wind_dir - theta_ik)) + (x_i[1]-x_k[1])*np.cos(abs(wind_dir - theta_ik)))/Eucl_dist
-                Partial_d_Partial_y_i = np.cos(wind_dir) * np.sign(x_i[1]-x_k[1])
+#                 #Partial_d_Partial_y_i = (-(x_i[0]-x_k[0])*np.sin(abs(wind_dir - theta_ik)) + (x_i[1]-x_k[1])*np.cos(abs(wind_dir - theta_ik)))/Eucl_dist
+#                 Partial_d_Partial_y_i = np.cos(wind_dir) * np.sign(x_i[1]-x_k[1])
                 
-                # Matrix-values expressions
-                #Partial_r_Partial_x_i = (Eucl_dist*np.sin(abs(wind_dir - theta_ik)) - np.outer(np.cos(theta_i), r_i))*(-Partial_d_Partial_y_i)/r
-                Partial_r_Partial_x_i = (radial_dist_ik - np.outer(np.cos(theta_i), r_i))/r*np.cos(wind_dir) * np.sign(x_i[1]-x_k[1])*np.sign(theta_ik-wind_dir)
+#                 # Matrix-values expressions
+#                 #Partial_r_Partial_x_i = (Eucl_dist*np.sin(abs(wind_dir - theta_ik)) - np.outer(np.cos(theta_i), r_i))*(-Partial_d_Partial_y_i)/r
+#                 Partial_r_Partial_x_i = (radial_dist_ik - np.outer(np.cos(theta_i), r_i))/r*np.cos(wind_dir) * np.sign(x_i[1]-x_k[1])*np.sign(theta_ik-wind_dir)
             
                 
-                Partial_r_Partial_y_i = -(radial_dist_ik - np.outer(np.cos(theta_i), r_i))/r*np.sin(wind_dir) * np.sign(x_i[1]-x_k[1])*np.sign(theta_ik-wind_dir)
+#                 Partial_r_Partial_y_i = -(radial_dist_ik - np.outer(np.cos(theta_i), r_i))/r*np.sin(wind_dir) * np.sign(x_i[1]-x_k[1])*np.sign(theta_ik-wind_dir)
                 
                 
-                integrand_pts_xder = (Partial_delta_u_Partial_d*Partial_d_Partial_x_i + Partial_delta_u_Partial_r*Partial_r_Partial_x_i)*np.tile(r_i,(n_points_theta,1))
+#                 integrand_pts_xder = (Partial_delta_u_Partial_d*Partial_d_Partial_x_i + Partial_delta_u_Partial_r*Partial_r_Partial_x_i)*np.tile(r_i,(n_points_theta,1))
                                 
-                integrand_pts_yder = (Partial_delta_u_Partial_d*Partial_d_Partial_y_i + Partial_delta_u_Partial_r*Partial_r_Partial_y_i)*np.tile(r_i,(n_points_theta,1))
+#                 integrand_pts_yder = (Partial_delta_u_Partial_d*Partial_d_Partial_y_i + Partial_delta_u_Partial_r*Partial_r_Partial_y_i)*np.tile(r_i,(n_points_theta,1))
                 
                 
-                # Numerical integration Simpson's rule 2D, polar coordinates
-                # We assume integration around turbine i below, hence R0[i]; DOUBLE-CHECK!
-                Partial_delta_u_ik_Partial_x_q[i,k,i] = 1/(np.pi*R0[i]**2)*simps( simps(integrand_pts_xder, theta_i, axis = 0),r_i)
+#                 # Numerical integration Simpson's rule 2D, polar coordinates
+#                 # We assume integration around turbine i below, hence R0[i]; DOUBLE-CHECK!
+#                 Partial_delta_u_ik_Partial_x_q[i,k,i] = 1/(np.pi*R0[i]**2)*simps( simps(integrand_pts_xder, theta_i, axis = 0),r_i)
                 
-                Partial_delta_u_ik_Partial_y_q[i,k,i] = 1/(np.pi*R0[i]**2)*simps( simps(integrand_pts_yder, theta_i, axis = 0),r_i)
+#                 Partial_delta_u_ik_Partial_y_q[i,k,i] = 1/(np.pi*R0[i]**2)*simps( simps(integrand_pts_yder, theta_i, axis = 0),r_i)
                 
-                Partial_u_i_Partial_x_q[i,i] += Partial_u_i_Partial_delta_u_ik[i,k]*Partial_delta_u_ik_Partial_x_q[i,k,i]
-                Partial_u_i_Partial_y_q[i,i] += Partial_u_i_Partial_delta_u_ik[i,k]*Partial_delta_u_ik_Partial_y_q[i,k,i]
+#                 Partial_u_i_Partial_x_q[i,i] += Partial_u_i_Partial_delta_u_ik[i,k]*Partial_delta_u_ik_Partial_x_q[i,k,i]
+#                 Partial_u_i_Partial_y_q[i,i] += Partial_u_i_Partial_delta_u_ik[i,k]*Partial_delta_u_ik_Partial_y_q[i,k,i]
                 
-                #print("First case, Partial_u_i_Partial_x_q[i,i]", Partial_u_i_Partial_x_q[i,i])
-                #print("First case, Partial_u_i_Partial_y_q[i,i]", Partial_u_i_Partial_y_q[i,i])
+#                 #print("First case, Partial_u_i_Partial_x_q[i,i]", Partial_u_i_Partial_x_q[i,i])
+#                 #print("First case, Partial_u_i_Partial_y_q[i,i]", Partial_u_i_Partial_y_q[i,i])
                 
                 
-                #print("Partial_delta_u_Partial_r: ", Partial_delta_u_Partial_r)
-                #print("Partial_r_Partial_x_i: ", Partial_r_Partial_x_i)
+#                 #print("Partial_delta_u_Partial_r: ", Partial_delta_u_Partial_r)
+#                 #print("Partial_r_Partial_x_i: ", Partial_r_Partial_x_i)
                 
-    # Second case, second factor D delta_u_iq/ D x_q
-    for i in range(N_turb):
-        x_i = x_all[i,:]
-        for q in range(N_turb):
-            if q != i:
-                x_q = x_all[q,:]
-                theta_iq = np.arctan2((x_i[0]-x_q[0]),(x_i[1]-x_q[1]))
+#     # Second case, second factor D delta_u_iq/ D x_q
+#     for i in range(N_turb):
+#         x_i = x_all[i,:]
+#         for q in range(N_turb):
+#             if q != i:
+#                 x_q = x_all[q,:]
+#                 theta_iq = np.arctan2((x_i[0]-x_q[0]),(x_i[1]-x_q[1]))
     
-                Eucl_dist = np.sqrt((x_i[0]-x_q[0])**2 + (x_i[1]-x_q[1])**2)
-                downstream_dist_iq = Eucl_dist*np.cos(abs(theta_iq - wind_dir))
-                radial_dist_iq =  Eucl_dist*np.sin(abs(theta_iq - wind_dir))
+#                 Eucl_dist = np.sqrt((x_i[0]-x_q[0])**2 + (x_i[1]-x_q[1])**2)
+#                 downstream_dist_iq = Eucl_dist*np.cos(abs(theta_iq - wind_dir))
+#                 radial_dist_iq =  Eucl_dist*np.sin(abs(theta_iq - wind_dir))
  
-                r = np.sqrt((radial_dist_iq - np.outer(np.cos(theta_i), r_i) )**2 + (np.outer(np.sin(theta_i), r_i))**2)
-                d = downstream_dist_iq
+#                 r = np.sqrt((radial_dist_iq - np.outer(np.cos(theta_i), r_i) )**2 + (np.outer(np.sin(theta_i), r_i))**2)
+#                 d = downstream_dist_iq
                 
                 
-                _, Partial_delta_u_Partial_d, Partial_delta_u_Partial_r = wake_model_continuous(d, r, alpha, 2*R0[k])
+#                 _, Partial_delta_u_Partial_d, Partial_delta_u_Partial_r = wake_model_continuous(d, r, alpha, 2*R0[k])
                 
-                #Partial_d_iq_Partial_x_q = (-(x_i[1]-x_q[1])*np.sin(wind_dir - theta_iq) - (x_i[0]-x_q[0])*np.cos(abs(wind_dir - theta_ik)))/Eucl_dist
-                Partial_d_iq_Partial_x_q = -np.sin(wind_dir)*np.sign(x_i[1]-x_q[1])
+#                 #Partial_d_iq_Partial_x_q = (-(x_i[1]-x_q[1])*np.sin(wind_dir - theta_iq) - (x_i[0]-x_q[0])*np.cos(abs(wind_dir - theta_ik)))/Eucl_dist
+#                 Partial_d_iq_Partial_x_q = -np.sin(wind_dir)*np.sign(x_i[1]-x_q[1])
                 
-                #Partial_d_iq_Partial_y_q = ((x_i[0]-x_q[0])*np.sin(wind_dir - theta_iq) - (x_i[1]-x_q[1])*np.cos(abs(wind_dir - theta_ik)))/Eucl_dist
-                Partial_d_iq_Partial_y_q = -np.cos(wind_dir)*np.sign(x_i[1]-x_q[1])
+#                 #Partial_d_iq_Partial_y_q = ((x_i[0]-x_q[0])*np.sin(wind_dir - theta_iq) - (x_i[1]-x_q[1])*np.cos(abs(wind_dir - theta_ik)))/Eucl_dist
+#                 Partial_d_iq_Partial_y_q = -np.cos(wind_dir)*np.sign(x_i[1]-x_q[1])
                 
-                # Matrix-valued expressions
-                #Partial_r_Partial_x_q = (Eucl_dist*np.sin(abs(wind_dir - theta_ik)) - np.outer(np.cos(theta_i), r_i))*(-Partial_d_Partial_y_i)/r
-                Partial_r_Partial_x_q = -(radial_dist_iq - np.outer(np.cos(theta_i), r_i))/r*np.cos(wind_dir) * np.sign(x_i[1]-x_q[1])*np.sign(theta_iq-wind_dir)
+#                 # Matrix-valued expressions
+#                 #Partial_r_Partial_x_q = (Eucl_dist*np.sin(abs(wind_dir - theta_ik)) - np.outer(np.cos(theta_i), r_i))*(-Partial_d_Partial_y_i)/r
+#                 Partial_r_Partial_x_q = -(radial_dist_iq - np.outer(np.cos(theta_i), r_i))/r*np.cos(wind_dir) * np.sign(x_i[1]-x_q[1])*np.sign(theta_iq-wind_dir)
                 
-                Partial_r_Partial_y_q = (radial_dist_iq - np.outer(np.cos(theta_i), r_i))/r*np.sin(wind_dir) * np.sign(x_i[1]-x_q[1])*np.sign(theta_iq-wind_dir)
+#                 Partial_r_Partial_y_q = (radial_dist_iq - np.outer(np.cos(theta_i), r_i))/r*np.sin(wind_dir) * np.sign(x_i[1]-x_q[1])*np.sign(theta_iq-wind_dir)
                 
                 
-                integrand_pts_xder = (Partial_delta_u_Partial_d*Partial_d_iq_Partial_x_q + Partial_delta_u_Partial_r*Partial_r_Partial_x_q)*np.tile(r_i,(n_points_theta,1))
+#                 integrand_pts_xder = (Partial_delta_u_Partial_d*Partial_d_iq_Partial_x_q + Partial_delta_u_Partial_r*Partial_r_Partial_x_q)*np.tile(r_i,(n_points_theta,1))
                                 
-                integrand_pts_yder = (Partial_delta_u_Partial_d*Partial_d_iq_Partial_y_q + Partial_delta_u_Partial_r*Partial_r_Partial_y_q)*np.tile(r_i,(n_points_theta,1))
+#                 integrand_pts_yder = (Partial_delta_u_Partial_d*Partial_d_iq_Partial_y_q + Partial_delta_u_Partial_r*Partial_r_Partial_y_q)*np.tile(r_i,(n_points_theta,1))
                 
                         
                 
-                # Numerical integration Simpson's rule 2D, polar coordinates
+#                 # Numerical integration Simpson's rule 2D, polar coordinates
                 
-                Partial_delta_u_ik_Partial_x_q[i,q,q] = 1/(np.pi*R0[i]**2)*simps( simps(integrand_pts_xder, theta_i, axis = 0),r_i)
+#                 Partial_delta_u_ik_Partial_x_q[i,q,q] = 1/(np.pi*R0[i]**2)*simps( simps(integrand_pts_xder, theta_i, axis = 0),r_i)
                 
-                Partial_delta_u_ik_Partial_y_q[i,q,q] = 1/(np.pi*R0[i]**2)*simps( simps(integrand_pts_yder, theta_i, axis = 0),r_i)
+#                 Partial_delta_u_ik_Partial_y_q[i,q,q] = 1/(np.pi*R0[i]**2)*simps( simps(integrand_pts_yder, theta_i, axis = 0),r_i)
                 
-                # THESE HAVE BEEN CHANGED NOV 11
-                Partial_u_i_Partial_x_q[i,q] += Partial_u_i_Partial_delta_u_ik[i,q]*Partial_delta_u_ik_Partial_x_q[i,q,q]
-                Partial_u_i_Partial_y_q[i,q] += Partial_u_i_Partial_delta_u_ik[i,q]*Partial_delta_u_ik_Partial_y_q[i,q,q]
+#                 # THESE HAVE BEEN CHANGED NOV 11
+#                 Partial_u_i_Partial_x_q[i,q] += Partial_u_i_Partial_delta_u_ik[i,q]*Partial_delta_u_ik_Partial_x_q[i,q,q]
+#                 Partial_u_i_Partial_y_q[i,q] += Partial_u_i_Partial_delta_u_ik[i,q]*Partial_delta_u_ik_Partial_y_q[i,q,q]
                     
-    #print("Partial_u_i_Partial_delta_u_ik: ", Partial_u_i_Partial_delta_u_ik)
-    #print("Partial_delta_u_ik_Partial_x_q: ", Partial_delta_u_ik_Partial_x_q)
-    Partial_f_Partial_x_q = np.zeros((N_turb,1))
-    Partial_f_Partial_y_q = np.zeros((N_turb,1))
-    A = np.pi*np.power(R0,2)
-    for q in range(N_turb):
-        # Check cut-in and cut-out speeds below:
-        Partial_f_Partial_x_q[q] = 1.5*rho*C_p*np.sum(A*u_i**2*Partial_u_i_Partial_x_q[:,q])
-        Partial_f_Partial_y_q[q] = 1.5*rho*C_p*np.sum(A*u_i**2*Partial_u_i_Partial_y_q[:,q])
+#     #print("Partial_u_i_Partial_delta_u_ik: ", Partial_u_i_Partial_delta_u_ik)
+#     #print("Partial_delta_u_ik_Partial_x_q: ", Partial_delta_u_ik_Partial_x_q)
+#     Partial_f_Partial_x_q = np.zeros((N_turb,1))
+#     Partial_f_Partial_y_q = np.zeros((N_turb,1))
+#     A = np.pi*np.power(R0,2)
+#     for q in range(N_turb):
+#         # Check cut-in and cut-out speeds below:
+#         Partial_f_Partial_x_q[q] = 1.5*rho*C_p*np.sum(A*u_i**2*Partial_u_i_Partial_x_q[:,q])
+#         Partial_f_Partial_y_q[q] = 1.5*rho*C_p*np.sum(A*u_i**2*Partial_u_i_Partial_y_q[:,q])
     
     
-    #g = np.zeros((2*N_turb,1))
-    g = np.zeros_like(x_vector)
-    g[::2] = Partial_f_Partial_x_q.flatten()
-    g[1::2] = Partial_f_Partial_y_q.flatten()
+#     #g = np.zeros((2*N_turb,1))
+#     g = np.zeros_like(x_vector)
+#     g[::2] = Partial_f_Partial_x_q.flatten()
+#     g[1::2] = Partial_f_Partial_y_q.flatten()
     
-    return -P, -g
-    #return delta_u_ij
+#     return -P, -g
+#     #return delta_u_ij
 
+@rectangular_area([-100, 100], [-100, 100])
 def calc_total_P(x_vector, U, wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_p):
     #print("Checking x_vector: ", np.shape(x_vector))
     #    np.atleast_1d(
@@ -384,26 +465,26 @@ def calc_total_P(x_vector, U, wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_p
         
     return -np.sum(p_i)
 
-def partial_fun(fun, x, fun_param, dl=0.1):
-    """
-    Calculates the partial derivatives of the function 'fun' at point 'x', of the variables 'x'
-    Args:
-        fun       : is a function taking the arguments (x, *fun_param)
-        x         : the point where the partial derivative is evaluated. (assumin a 1-D ndarray)
-        fun_param : the rest of 'fun''s arguments. (assumin a tuple)
-        dl        : the size of variation used to calculate the partial derivativs. (default = 0.1)
-    Output:
-        dP : list of partial derivative, with the same ordering as the 'x' array. (1-D ndarray)
-    """
-    dP = np.zeros(len(x))
-    dx = np.zeros(x.shape)
-    for i in np.arange(len(x)):
-        dx[i] = dl
-        fun_p, g_tmp = fun(x+dx, *fun_param)
-        fun_n, g_tmp = fun(x-dx, *fun_param)
-        dP[i] = (fun_p - fun_n)/(2*dl)
-        dx[i] = 0
-    return dP
+# def partial_fun(fun, x, fun_param, dl=0.1):
+#     """
+#     Calculates the partial derivatives of the function 'fun' at point 'x', of the variables 'x'
+#     Args:
+#         fun       : is a function taking the arguments (x, *fun_param)
+#         x         : the point where the partial derivative is evaluated. (assumin a 1-D ndarray)
+#         fun_param : the rest of 'fun''s arguments. (assumin a tuple)
+#         dl        : the size of variation used to calculate the partial derivativs. (default = 0.1)
+#     Output:
+#         dP : list of partial derivative, with the same ordering as the 'x' array. (1-D ndarray)
+#     """
+#     dP = np.zeros(len(x))
+#     dx = np.zeros(x.shape)
+#     for i in np.arange(len(x)):
+#         dx[i] = dl
+#         fun_p, g_tmp = fun(x+dx, *fun_param)
+#         fun_n, g_tmp = fun(x-dx, *fun_param)
+#         dP[i] = (fun_p - fun_n)/(2*dl)
+#         dx[i] = 0
+#     return dP
 
 def calc_partial(fun, x, fun_param, dl=0.1):
     """
@@ -425,9 +506,11 @@ def calc_partial(fun, x, fun_param, dl=0.1):
         dx[i] = 0
     return dP
 
+
 def objective_fun_num(x_vector, U, wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_p):
     fun_param = U, wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_p
     return calc_total_P(x_vector, *fun_param), calc_partial(calc_total_P, x_vector, fun_param)
+
 
 
 # Main program
@@ -452,7 +535,7 @@ x_all = np.array([[0,0],[-40,40], [40,40], [0,80]])
 x_all = np.array([[0,0],[0,30],[0,60],[30,0],[30,30],[30,60],[60,0],[60,30],[60,60]])
 x_all = np.array([[0,0],[0,30],[0,60],[60,0],[60,30],[60,60]])
 x_all = np.array([[0,0],[0,60],[30,0],[30,60],[60,0],[60,60]])
-x_all = np.array([[0,0],[0,50]])
+
 # Radius and diameter, currently assuming all turbines to be identical
 R0 = [10, 10, 20, 20, 10, 10]
 R0 = [20, 20, 10, 10]
@@ -465,14 +548,13 @@ N_turb = len(R0)
 
 
 
-x_i = x_all[1,:]
 #x_i = x_all[0:1]
 U = 20
 
 # Set wind direction (radians):
 # S: 0; W: pi/2; N: pi; E: 3/2*pi
 
-wind_dir = 0.01*np.pi #1.0*np.pi #0.23*np.pi #0.28*np.pi
+wind_dir = 0.01 #1.0*np.pi #0.23*np.pi #0.28*np.pi
 
 
 
@@ -480,87 +562,79 @@ wind_dir = 0.01*np.pi #1.0*np.pi #0.23*np.pi #0.28*np.pi
 r_i = np.atleast_2d([0.1])
 theta_i = np.atleast_2d([1])
 
-u_fun = wind_speed_due_to_wake(x_i, x_all, U, wind_dir, D, r_i, theta_i)
+#u_fun = wind_speed_due_to_wake(x_i, x_all, U, wind_dir, D, r_i, theta_i)
 #W  = Simpson_2D(0,1,0,1,6,u_fun)
 
-u_eff, _ = averaged_wind_speed(x_i, x_all, U, wind_dir, D, R0[0])
-print("Averaged wind speed: ", u_eff)
+#u_eff, _ = averaged_wind_speed(x_i, x_all, U, wind_dir, D, R0[0])
+#print("Averaged wind speed: ", u_eff)
 
-print()
+#print()
 
 #exit(1)
 
 #x_vector = np.zeros((2*N_turb,1))
 #x_vector[:,0] = np.reshape(x_all, -1)
-x_vector = np.reshape(x_all, -1)
+
+
 
 ############################################################################################## ADDED EJ
-fun_param = U,wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_p
+R0 = [20,20,20,20]
+D = 2*R0
 
-#P, dP = objective_fun(x_vector, U,wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_p)
-
-P, dP = objective_fun(x_vector, *fun_param)
-P_new, dP_new = objective_fun_num(x_vector, *fun_param)
-
-print("dP is of type: ", end=" ")
-print(type(dP), end=" ")
-print(dP.shape)
+N_turb = len(R0)
+x_all = np.array([[50.,50.0],[-50.,50.0],[-50.,-50.0],[50.,-50.0]])
 
 
-dP_num = partial_fun(objective_fun, x_vector, fun_param)
-#P_new = calc_total_P(x_vector, *fun_param)
-#dP_new = calc_partial(calc_total_P, x_vector, fun_param)
+for wind_dir in np.array([0, 0.25, 0.5, 0.75])*np.pi + 0.01:#np.array([0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75+0.01:
+    x_i = x_all[1,:]
+    x_vector = np.copy(np.reshape(x_all, -1))
 
-print(P, P_new, dP, dP_num, dP_new)
+    fun_param = U,wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_p
+
+    val_min = 100000000
+    # Test simple minimalization
+    # from math import isnan 
+    for n in np.arange(1000):
+        dt = 0.5
+        val, d_val = objective_fun_num(x_vector, *fun_param)
+        #print(d_val)
+        norm = np.amax(np.abs(d_val))*np.size(d_val) 
+        norm = norm if norm>0 else 1.0
+        #x_vector -= dt*d_val/norm   
+        #print(val)
+        #print(x_vector, end="\n\n")
+        if val < val_min:
+            x_vector -= dt*d_val/norm
+            val_min = val
+        else:
+            print("val = " + str(val_min) + " ("+str(n) + ")")
+            break
 
 
-# # Print wind field
-# N_x = 150
-# N_y = 600
-# x_grid = np.linspace(-100,100,N_x)
-# y_grid = np.linspace(-200,500,N_y)
+    print_wind_field(np.copy(np.reshape(x_vector, x_all.shape)), U, wind_dir, D, f"basic algorithm {int(180*wind_dir/np.pi)}")
 
-# #x_grid = np.linspace(-50,100,N_x)
-# #y_grid = np.linspace(-50,300,N_y)
+    x_i = x_all[1,:]
+    x_vector = np.copy(np.reshape(x_all, -1))
+    constr = LinearConstraint(np.identity(2*N_turb), x_vector-50, x_vector+50 )
+    obj_fun = functools.partial(objective_fun_num, U=U,wind_dir=wind_dir, R0=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, C_p=C_p)
+    res = minimize(obj_fun, x_vector, method='BFGS', jac=True, options={'disp': True}, constraints=None)
 
-# u_eval = np.zeros((N_x, N_y))
-# delta_u_eval = np.zeros((N_turb, N_x, N_y))
+    print_wind_field(np.copy(np.reshape(res.x, x_all.shape)), U, wind_dir, D, f"python algorithm {int(180*wind_dir/np.pi)}")
 
-# u_eval_optim = np.zeros((N_x, N_y))
-# delta_u_eval_optim = np.zeros((N_turb, N_x, N_y))
-
-
-# for ix in range(N_x):
-#     for iy in range(N_y):
-#         x_i = (x_grid[ix], y_grid[iy])
-
-#         u_eval[ix,iy], temp = wind_speed_due_to_wake(x_i, x_all, U, wind_dir, D, r_i = 0, theta_i = 0)
-#         delta_u_eval[:,ix,iy] = temp.flatten()
-
-# fig = plt.figure(constrained_layout=True)
-
-# (xv, yv) = np.meshgrid(x_grid, y_grid)
-# #ax = fig.add_subplot(111, projection='3d')
-# #surf = ax.plot_surface(xv, yv, u_eval.T, cmap=plt.cm.coolwarm)
-# #cset = ax.contourf(xv, yv, u_eval.T, zdir='z', offset=25, cmap=cm.coolwarm)
-# #ax.scatter3D(x_all[:,0], x_all[:,1], np.full((1,N_turb),25),'+k', s=4)
-# plt.pcolormesh(xv, yv, u_eval.T)
-# #plt.axis("tight")
-# plt.axis("equal")
-# plt.show()
+plt.show()
 
 
 if False:
 #================================================================================================== ADDED EJ END
     constr = LinearConstraint(np.identity(2*N_turb), x_vector-50, x_vector+50 )
 
-    wind_dirs = np.array([0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75])*np.pi + 1e-2
+    wind_dirs = np.array([0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75])*np.pi +0.01
 
     # Visualize wind field due to wake effects
-    N_x = 150
-    N_y = 600
-    x_grid = np.linspace(-100,100,N_x)
-    y_grid = np.linspace(-200,500,N_y)
+    N_x = 240
+    N_y = 240
+    x_grid = np.linspace(-120,120,N_x)
+    y_grid = np.linspace(-120,120,N_y)
 
     #x_grid = np.linspace(-50,100,N_x)
     #y_grid = np.linspace(-50,300,N_y)
