@@ -594,7 +594,7 @@ for wind_dir in np.array([0, 0.25, 0.5, 0.75])*np.pi + 0.01:#np.array([0, 0.25, 
     val_min = 100000000
     # Test simple minimalization
     # from math import isnan 
-    for n in np.arange(1000):
+    for n in np.arange(100):
         dt = 0.5
         val, d_val = objective_fun_num(x_vector, *fun_param)
         #print(d_val)
