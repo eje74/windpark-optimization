@@ -595,7 +595,7 @@ for wind_dir in np.array([0, 0.25, 0.5, 0.75])*np.pi + 0.01:#np.array([0, 0.25, 
     # Test simple minimalization
     # from math import isnan 
     for n in np.arange(100):
-        dt = 0.5
+        dt = 1.0
         val, d_val = objective_fun_num(x_vector, *fun_param)
         #print(d_val)
         norm = np.amax(np.abs(d_val))*np.size(d_val) 
@@ -610,7 +610,8 @@ for wind_dir in np.array([0, 0.25, 0.5, 0.75])*np.pi + 0.01:#np.array([0, 0.25, 
             print("val = " + str(val_min) + " ("+str(n) + ")")
             break
 
-
+    print("(final) val = " + str(val_min) + " ("+str(n) + ")")
+        
     print_wind_field(np.copy(np.reshape(x_vector, x_all.shape)), U, wind_dir, D, f"basic algorithm {int(180*wind_dir/np.pi)}")
 
     x_i = x_all[1,:]
