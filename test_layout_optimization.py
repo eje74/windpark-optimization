@@ -442,7 +442,7 @@ def averaged_wind_speed(x_i, x_all, U, wind_dir, D, R0):
 #     return -P, -g
 #     #return delta_u_ij
 
-@rectangular_area([-100, 100], [-100, 100])
+#@rectangular_area([-100, 100], [-100, 100])
 def calc_total_P(x_vector, U, wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_p):
     #print("Checking x_vector: ", np.shape(x_vector))
     #    np.atleast_1d(
@@ -581,36 +581,42 @@ theta_i = np.atleast_2d([1])
 R0 = [20,20,20,20]
 D = 2*R0
 
+x_min = -100*np.ones((8,))
+x_max =  100*np.ones((8,))
+
+
 N_turb = len(R0)
 x_all = np.array([[50.,50.0],[-50.,50.0],[-50.,-50.0],[50.,-50.0]])
 
 
-for wind_dir in np.array([0, 0.25, 0.5, 0.75])*np.pi + 0.01:#np.array([0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75+0.01:
+for wind_dir in np.array([0, 0.25, 0.5, 0.75])*np.pi:#np.array([0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75+0.01:
     x_i = x_all[1,:]
     x_vector = np.copy(np.reshape(x_all, -1))
 
     fun_param = U,wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_p
 
-    val_min = 100000000
-    # Test simple minimalization
-    # from math import isnan 
-    for n in np.arange(100):
-        dt = 1.0
-        val, d_val = objective_fun_num(x_vector, *fun_param)
-        #print(d_val)
-        norm = np.amax(np.abs(d_val))*np.size(d_val) 
-        norm = norm if norm>0 else 1.0
-        #x_vector -= dt*d_val/norm   
-        #print(val)
-        #print(x_vector, end="\n\n")
-        if val < val_min:
-            x_vector -= dt*d_val/norm
-            val_min = val
-        else:
-            print("val = " + str(val_min) + " ("+str(n) + ")")
-            break
+    from wp_optimize import minimize_fun
+    x_vector = minimize_fun(calc_total_P, x_vector, fun_param, x_min, x_max, max_step_size=50)
+    val_min = calc_total_P(x_vector, *fun_param)
+    # val_min = 100000000
+    # # Test simple minimalization
+    # for n in np.arange(100):
+    #     dt = 1.0
+    #     val, d_val = objective_fun_num(x_vector, *fun_param)
+    #     #print(d_val)
+    #     norm = np.amax(np.abs(d_val))*np.size(d_val) 
+    #     norm = norm if norm>0 else 1.0
+    #     #x_vector -= dt*d_val/norm   
+    #     #print(val)
+    #     #print(x_vector, end="\n\n")
+    #     if val < val_min:
+    #         x_vector -= dt*d_val/norm
+    #         val_min = val
+    #     else:
+    #         print("val = " + str(val_min) + " ("+str(n) + ")")
+    #         break
 
-    print("(final) val = " + str(val_min) + " ("+str(n) + ")")
+    print("(final) val = " + str(val_min) + " ("+str(0) + ")")
         
     print_wind_field(np.copy(np.reshape(x_vector, x_all.shape)), U, wind_dir, D, f"basic algorithm {int(180*wind_dir/np.pi)}")
 
