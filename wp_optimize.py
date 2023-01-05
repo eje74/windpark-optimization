@@ -25,14 +25,59 @@ def gradient(fun, x, *param, dx=1.0):
 def x_enforce_limits(x, x_min, x_max):
     return x + 2*(x_min-x)*(x < x_min) + 2*(x_max-x)*(x > x_max) 
 
-def minimize_fun(f, x_init, param, x_min, x_max, min_step_size=0.01, max_step_size=100, max_number_of_iterations=100, multiplicative_increase=2.0, init_step_size=1.0):
-    """Minimizes the function f using a steepest gradient approach
+
+def summerize_minimize(heading, n, fun_count, grad_count):
+    r"""Prints a standard message summerizing the counts of function calls used
+     in `minimize_fun`"""
+    print(heading)
+    print(f"\tIterations          : {n}")
+    print(f"\tFunction evaluations: {fun_count}")
+    print(f"\tGradient evaluations: {grad_count}")
+
+
+def minimize_fun(f, x_init, param, x_min, x_max, min_step_size, max_step_size, max_number_of_iterations=100, multiplicative_increase=2.0, init_step_size=1.0):
+    r"""Minimizes the function f: f(x, *param) using a steepest gradient descent. 
+
+    Parameters
+    ----------
+    f : function
+    x_init : array_like
+        Initial guess
+    param : tuple
+        Other paramters to `f` that is kept constant.
+    x_min : array_like
+        Array containing the minimal values allowed for x. Must be same shape as x,
+        or a scalar value.
+    x_max : array_like
+        Array containing the maximal values allowed for x. Must be same shape as x,
+        or a scalar value.
+    min_step_size : float
+        Minimum step size in the steepest decsent algorithm, and used as a convergence
+        criteria for the algorithm.
+    max_step_size : float
+        Maximum step size allowed in the steepest descent algorithm.
+    max_number_of_iterations : int, default=100
+        Maximum number of steepest descent iterations. The algorithm ends after this
+        number of iterations.
+    multiplicative_increase : float, default=2.0
+        The multiplicative factor used for increasing the step length. Its inverse is
+        used for decreasing the step length. `multiplicative_increase` must be larger 
+        than 1.0.
+    init_step_size : float, default=1.0
+        The initial step length used in the algorithm.
+
+    Returns
+    -------
+    x : array_like
+        Functional input that miminizes f(x, *param)
+
     """
     step_size = init_step_size
     step_size_trail = step_size
 
+    # Counters used in summerize
     fun_count  = 0
-    grad_fun_count = 0
+    grad_count = 0
 
     # Unknown varaible
     x = x_init
@@ -40,13 +85,11 @@ def minimize_fun(f, x_init, param, x_min, x_max, min_step_size=0.01, max_step_si
     fun_count += 1
     fx_old = fx
     # Optimalization code body
-    #   Calculate gradient
     for n in np.arange(max_number_of_iterations):
         df = gradient(f, x, *param, dx=min_step_size)
         df = array_norm(df)
         df += 2e-2*(np.random.random_sample(df.shape) - 0.5)
-        grad_fun_count += 1
-        #   Choose step_size
+        grad_count += 1
         step_size_trail = step_size
         x_trail = x_enforce_limits(x - step_size_trail*df, x_min, x_max)
         fx_trail = f(x_trail, *param) 
@@ -67,21 +110,13 @@ def minimize_fun(f, x_init, param, x_min, x_max, min_step_size=0.01, max_step_si
                 fx_trail = f(x_trail, *param)
                 fun_count += 1
                 if step_size < min_step_size:
-                    print("Minimization converged")
-                    print(f"Iteration          : {n}")
-                    print(f"Function evaluation: {fun_count}")
-                    print(f"Gradient evaluation: {grad_fun_count}")
+                    summerize_minimize("Minimization converged", n, fun_count, grad_count)
                     return x
         x = x_enforce_limits(x - step_size*df, x_min, x_max)
         fx = f(x, *param)
         fun_count += 1
-        #print(f"reduction: {fx_old - fx}, {step_size}")
         fx_old = fx
-
-    print("Minimization did not converge")
-    print(f"Iteration          : {n}")
-    print(f"Function evaluation: {fun_count}")
-    print(f"Gradient evaluation: {grad_fun_count}")
+    summerize_minimize("Minimization did not converge", n, fun_count, grad_count)
     return x
 
 
@@ -104,7 +139,7 @@ if __name__ == "__main__":
     x_max =  100*np.ones((2,))
     x_init = np.array([49, -45])
 
-    x = minimize_fun(f, x_init, param, x_min, x_max)
+    x = minimize_fun(f, x_init, param, x_min, x_max, 0.01, 40.0)
     print(f"{x[0]}  {fmin(*param)}")
     print(f"{x[1]}  {fmin(*param)}")
 

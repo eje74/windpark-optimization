@@ -596,7 +596,7 @@ for wind_dir in np.array([0, 0.25, 0.5, 0.75])*np.pi:#np.array([0, 0.25, 0.5, 0.
     fun_param = U,wind_dir, R0, alpha, rho, U_cut_in, U_cut_out, C_p
 
     from wp_optimize import minimize_fun
-    x_vector = minimize_fun(calc_total_P, x_vector, fun_param, x_min, x_max, max_step_size=50)
+    x_vector = minimize_fun(calc_total_P, x_vector, fun_param, x_min, x_max, 0.01, 20.0)
     val_min = calc_total_P(x_vector, *fun_param)
     # val_min = 100000000
     # # Test simple minimalization
