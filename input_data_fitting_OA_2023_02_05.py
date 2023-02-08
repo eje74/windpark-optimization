@@ -29,6 +29,8 @@ def test_obj(w_speed, w_dir, design_var) -> np.ndarray:
      
     angle = design_var
     P = w_speed*np.cos((angle-w_dir)*np.pi/180)
+
+
     return P
     
     
@@ -48,6 +50,9 @@ def objective_fun_num_robust_design(x_vector, pts, wts, R0_loc, alpha, rho, U_cu
     Nq = len(wts)
     N_turb = int(len(x_vector)/2.)
     dPdx_evals = np.zeros((Nq,2*N_turb))
+    #P_evals = np.zeros((Nq,1))
+    P_evals = np.zeros(Nq)
+
     for q in range(Nq):
         U = pts[0,q]
         wind_dir = pts[1,q]*np.pi/180
@@ -61,6 +66,7 @@ def objective_fun_num_robust_design(x_vector, pts, wts, R0_loc, alpha, rho, U_cu
     grad_mu = wts.dot(dPdx_evals)
     #print("grad_mu: ", grad_mu)
     sigma = np.sqrt(np.sum(P_evals**2*wts)-mu**2)
+
     
     if sigma == 0:
 
@@ -277,7 +283,7 @@ def objective_fun_num(x_vector, U, wind_dir, R0_loc, alpha, rho, U_cut_in, U_cut
     return calc_total_P(x_vector, *fun_param), calc_partial(calc_total_P, x_vector, fun_param)
 
     
-# pathName = '/Users/pepe/Documents/MATLAB/wind_Matlab/'
+#pathName = '/Users/pepe/Documents/MATLAB/wind_Matlab/'
 #pathName = "C:/Users/jhel/" #'Documents/MATLAB/wind_Matlab/'
 pathName = '/home/AD.NORCERESEARCH.NO/olau/Documents/projects/DynPosWind/opt_farm/data/'
 
@@ -307,17 +313,38 @@ if False:
 
 #pathName = '/Users/pepe/Documents/Wind/Pywake/'
 #pathName = "C:/Users/jhel/" 
-pathName = '/home/AD.NORCERESEARCH.NO/olau/Documents/projects/DynPosWind/opt_farm/data/'
+#pathName = '/home/AD.NORCERESEARCH.NO/olau/Documents/projects/DynPosWind/opt_farm/data/'
     
 data_samples = np.array([u_data, theta_data])
     
 # Instantiate copula object from precomputed model saved to file
-copula = pv.Vinecop(filename = pathName + 'copula_tree_100m_2016_2017_2018_joh.txt', check=True)
+copula = pv.Vinecop(filename = pathName + 'copula_tree_100m_2016_2017_2018.txt', check=True)
 print(copula)
 
 num_samples = 10000 #Number of model evaluations
 num_samples = 26304
 num_dim = 2
+
+# Some physical/technical parameters must be introduced already here
+# Induction factor alpha, based on the actuator disc model
+# Note that alpha=(U-U_R)/U, so the actual wind speeds upstream and downstream of the disc should be used
+alpha = 0.3333333
+
+U_cut_in = 3 #5
+U_cut_out = 10 #25 #20
+rho = 1.225 # [kg/m 3]
+
+# Power coefficient
+C_p = 4*alpha*(1-alpha)**2
+#C_p= 16/27.*0.95
+
+#Olav 
+opt_tolerance_SLSQP = 5e-01
+maxiter_SLSQP = 200
+now = datetime.datetime.now()
+np.random.seed(0)
+rotorRadius = 50.
+
 
 # Independent uniforms
 u_samples_ind = np.random.uniform(low=0, high=1, size=(num_samples, num_dim))
@@ -326,62 +353,59 @@ u_samples_ind = np.random.uniform(low=0, high=1, size=(num_samples, num_dim))
 cop_samp_from_ind = copula.inverse_rosenblatt(u_samples_ind)
 
 
-
 # Transform back simulations to the original scale
 copula_samples_from_unif = np.asarray([np.quantile(data_samples[i,:], cop_samp_from_ind[:, i]) for i in range(0, num_dim)])
 
 
-#print("Check copula range: ", np.amin(copula_samples_from_unif,axis=1), np.amax(copula_samples_from_unif,axis=1))
+# Construct quadrature rule for expectation operators
+# Divide parameter domain w.r.t. U_cut_in and U_cut_off
+# Introduce point probability masses, and local GQ
+p_0 = np.sum(u_data < U_cut_in)/num_samples
+ind_var_s = (u_data < U_cut_out) & (u_data >= U_cut_in)
+ind_con_s = u_data >= U_cut_out
+p_1 = np.sum(ind_var_s)/num_samples
+p_2 = np.sum(ind_con_s)/num_samples
 
+#print("Probabilities: ", p_0, p_1, p_2, np.sum(p_0+p_1+p_2))
 
-#Number of quadrature points
-#deg = 20#5
-#[pts, wts] = np.polynomial.legendre.leggauss(deg)
+# Set number of quadrature points for the regions 1 ([U_cut_in, U_cut_out]) and 2 ([U_cut_out, infty])
+# in speed (sp) and direction (dir)
+Nq_sp = np.array([5,3])
+Nq_dir = np.array([10,10])
 
-deg_sp = 6
-deg_dir = 12
-#[pts, wts] = np.polynomial.legendre.leggauss(deg)
-[pts_sp, wts_sp] = np.polynomial.legendre.leggauss(deg_sp)
-[pts_dir, wts_dir] = np.polynomial.legendre.leggauss(deg_dir)
+[pts_sp_1, wts_sp_1] = np.polynomial.legendre.leggauss(Nq_sp[0])
+[pts_dir_1, wts_dir_1] = np.polynomial.legendre.leggauss(Nq_dir[0])
 
+[pts_sp_2, wts_sp_2] = np.polynomial.legendre.leggauss(Nq_sp[1])
+[pts_dir_2, wts_dir_2] = np.polynomial.legendre.leggauss(Nq_dir[1])
 
 # Rescale to unit interval, and weights summing to 1
-"""
-pts = (pts+1)/2.
-wts = 0.5*wts
-print("Legendre points and weights 1D: ", pts, wts)
+pts_sp_1 = (pts_sp_1+1)/2.
+wts_sp_1 = 0.5*wts_sp_1
+pts_dir_1 = (pts_dir_1+1)/2.
+wts_dir_1 = 0.5*wts_dir_1
 
-print("Quadrature tests 1D: ", sum(wts), sum(pts*wts), sum((pts**2)*wts), sum(pts**3*wts))
-
-pts_2D = repeat_product(pts, pts).T
-wts_2D = np.kron(wts, wts)
-
-print("Sizes 2D", np.shape(pts_2D), np.shape(wts_2D))
-print("Legendre points and weights 2D: ", pts_2D, wts_2D)
-
-print("Quadrature tests 2D: ", np.sum(wts_2D), np.sum(np.sum(pts_2D,axis=0)*wts_2D), np.sum((np.sum(pts_2D**2,axis=0))*wts_2D), np.sum(np.sum(pts_2D**3,axis=0)*wts_2D))
-"""
-
-pts_sp = (pts_sp+1)/2.
-wts_sp = 0.5*wts_sp
-pts_dir = (pts_dir+1)/2.
-wts_dir = 0.5*wts_dir
-print("Legendre points and weights 1D speed,: ", pts_sp, wts_sp)
-print("Legendre points and weights 1D dir,: ", pts_dir, wts_dir)
+pts_sp_2 = (pts_sp_2+1)/2.
+wts_sp_2 = 0.5*wts_sp_2
+pts_dir_2 = (pts_dir_2+1)/2.
+wts_dir_2 = 0.5*wts_dir_2
 
 #print("Quadrature tests 1D: ", sum(wts), sum(pts*wts), sum((pts**2)*wts), sum(pts**3*wts))
+# Quadrature for U in [U_cut_in, U_cut_out]
+pts_2D_1 = repeat_product(p_0+p_1*pts_sp_1, pts_dir_1).T
+wts_2D_1 = np.kron(wts_sp_1, wts_dir_1)
 
-pts_2D = repeat_product(pts_sp, pts_dir).T
+# Quadrature for U > U_cut_out
+pts_2D_2 = repeat_product(p_0+p_1+p_2*pts_sp_2, pts_dir_2).T
+wts_2D_2 = np.kron(wts_sp_2, wts_dir_2)
 
-wts_2D = np.kron(wts_sp, wts_dir)
+# Form compound quadrature rule
+pts_2D_comp = np.concatenate((np.zeros((2, 1)), pts_2D_1, pts_2D_2), axis=1)
+wts_2D_comp = np.concatenate(([p_0], p_1*wts_2D_1,p_2*wts_2D_2), axis=0)
 
-print("Sizes 2D", np.shape(pts_2D), np.shape(wts_2D))
-print("Legendre points 2D: ", pts_2D)
-print("Legendre weights 2D: ", wts_2D)
-
-print("Quadrature tests 2D: ", np.sum(wts_2D), np.sum(np.sum(pts_2D,axis=0)*wts_2D), np.sum((np.sum(pts_2D**2,axis=0))*wts_2D), np.sum(np.sum(pts_2D**3,axis=0)*wts_2D))
-
-
+# May want to compare to standard GQ, for now use only compound rule
+pts_2D = pts_2D_comp
+wts_2D = wts_2D_comp
 
 
 
@@ -402,10 +426,12 @@ print("MC copula: ", np.mean(np.prod(copula_samples_from_unif, axis=0)))
 
 print("MC data: ", np.mean(np.prod(data_samples, axis=0)))
 
-
+"""
+# PP Feb 7: I think we can remove this part for cleanliness
 design_var = 180
 P_evals = test_obj(cop_evals_physical[0,:],cop_evals_physical[1,:], design_var)
 print("P_evals: ", P_evals)
+#print("np.shape(P_evals): ", np.shape(P_evals))
 
 for angle in np.arange(0, 360, 45):
     design_var = angle
@@ -427,37 +453,24 @@ design_opt = res.x[0]
 mu_SMC = np.mean(test_obj(u_data, theta_data, design_opt))
 sigma_SMC = np.std(test_obj(u_data, theta_data, design_opt))
 print("SMC: -(mu-sigma)", -(mu_SMC-sigma_SMC))
+"""
 
 
-#Olav 
-opt_tolerance_SLSQP = 5e-01
-maxiter_SLSQP = 200
-now = datetime.datetime.now()
-np.random.seed(0)
 
 print("-------------------------------------------------------")
 print('start time: ', now)
 print("-------------------------------------------------------")
 
 # JAN 2023, try opt under unc.
-# Induction factor alpha, based on the actuator disc model
-# Note that alpha=(U-U_R)/U, so the actual wind speeds upstream and downstream of the disc should be used
-alpha = 0.3333333
 
-U_cut_in = 3 #5
-U_cut_out = 25 #20
-rho = 1.225 # [kg/m 3]
-
-# Power coefficient
-C_p = 4*alpha*(1-alpha)**2
 
 # Coordinates of all wind turbines
 
 #x_all = np.array([[0.,0.]])
-#x_all = np.array([[0,0],[100,100]])
+x_all = np.array([[0,0],[100,100]])
 
 #x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100]])
-x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100],[0,200],[0,-200],[200,0],[-200,0]])
+#x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100],[0,200],[0,-200],[200,0],[-200,0]])
 #x_all = np.array([[0,0],[20,20],[20,-20],[-20,20],[-20,-20],[0,40],[0,-40],[40,0],[-40,0],[40,40],[40,-40],[-40,40],[-40,-40]])
 #x_all = np.array([[0,0],[20,20],[20,-20],[-20,20],[-20,-20],[0,40],[0,-40],[40,0],[-40,0],[40,40],[40,-40],[-40,40],[-40,-40], [60,20],[60,-20],[-60,20],[-60,-20]])
 
@@ -475,13 +488,14 @@ print("x_vector", x_vector, "type ", x_vector.dtype)
 
 
 
-R0 = np.ones(len(x_all))*50.
+R0 = np.ones(len(x_all))*rotorRadius
 
 print("length of x_all:", len(x_all))
 
 print("R0:", R0)
 
 print("max power 1 turbine, P=", 0.5*rho*np.pi*R0[0]**2*C_p*U_cut_out**3/1e6,"MW")
+
 
 
 R_Constraint = (2*R0[0])**2 
@@ -661,7 +675,7 @@ plt.title('Robust design') #('Wind speed, opt. locations')
 
 #figname = '/Users/pepe/Documents/Wind/figures/Robust_design_Nturb_' + str(N_turb) + '.png'
 #figname = 'C:/Users/jhel/Wind_figs/Robust_design_Nturb_' + str(N_turb) + '.png'
-figname = pathName+'figures3/Robust_design_Nturb_' + str(N_turb)  + '_Nq(sp,dir)_' + str(deg_sp) +'_'+str(deg_dir) + '.png'
+figname = pathName+'figures3/Robust_design_Nturb_' + str(N_turb)  + '_Nq(sp,dir)_' + str(Nq_sp) +'_'+str(Nq_dir) + '.png'
 plt.savefig(figname)
 
 now = datetime.datetime.now()
