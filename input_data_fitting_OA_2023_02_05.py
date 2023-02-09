@@ -331,19 +331,20 @@ num_dim = 2
 alpha = 0.3333333
 
 U_cut_in = 3 #5
-U_cut_out = 10 #25 #20
-rho = 1.225 # [kg/m 3]
+U_cut_out = 10.59 #10 #25 #20
+U_stop = 25.
+rho = 1.225#1.225 # [kg/m 3]
 
 # Power coefficient
-C_p = 4*alpha*(1-alpha)**2
-#C_p= 16/27.*0.95
+#C_p = 4*alpha*(1-alpha)**2
+C_p= 0.489
 
 #Olav 
 opt_tolerance_SLSQP = 5e-01
 maxiter_SLSQP = 200
 now = datetime.datetime.now()
 np.random.seed(0)
-rotorRadius = 50.
+rotorRadius = 120 #50.
 
 
 # Independent uniforms
@@ -467,13 +468,16 @@ print("-------------------------------------------------------")
 # Coordinates of all wind turbines
 
 #x_all = np.array([[0.,0.]])
-x_all = np.array([[0,0],[100,100]])
+#x_all = np.array([[0,0],[240,240]])
 
 #x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100]])
 #x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100],[0,200],[0,-200],[200,0],[-200,0]])
 #x_all = np.array([[0,0],[20,20],[20,-20],[-20,20],[-20,-20],[0,40],[0,-40],[40,0],[-40,0],[40,40],[40,-40],[-40,40],[-40,-40]])
 #x_all = np.array([[0,0],[20,20],[20,-20],[-20,20],[-20,-20],[0,40],[0,-40],[40,0],[-40,0],[40,40],[40,-40],[-40,40],[-40,-40], [60,20],[60,-20],[-60,20],[-60,-20]])
 
+x_all = np.array([[-4500, 3000], [-2250, 3000], [0,3000], [2250, 3000], [4500,3000],[-4500, 1000], [-2250, 1000], [0,1000], [2250, 1000], [4500,1000], [-4500, -1000], [-2250, -1000], [0, -1000], [2250, -1000], [4500, -1000], [-4500, -3000], [-2250, -3000], [0,-3000], [2250, -3000], [4500,-3000]])
+#x_all = np.array([[-2000, 2500],[-1000,2500],[0,2500],[1000, 2500],[2000, 2500]])
+print("x_all.shape", x_all.shape)
 
 print("x_all", x_all)
 
@@ -514,18 +518,18 @@ N_turb = len(R0)
 print("Number of turbines:", N_turb)
 
 
-U = 20.0
+#U = 20.0
 # Set wind direction (radians):
 # S: 0; W: pi/2; N: pi; E: 3/2*pi
 
-wind_dir = 0.25*np.pi #1.0*np.pi #0.23*np.pi #0.28*np.pi
+#wind_dir = 0.25*np.pi #1.0*np.pi #0.23*np.pi #0.28*np.pi
 
 #lin_constr = LinearConstraint(np.identity(2*N_turb), x_vector-50, x_vector+50 )
 
-xmin = -375 #-250
-xmax = 375 #250
-ymin = -250
-ymax = 250
+xmin = -5000 #-41.6667*R0[0]#-375 #-250
+xmax = 5000 #41.6667*R0[0]#-375 #250
+ymin = -3000 #-25*R0[0]#-250
+ymax = 3000#25*R0[0]#250
 
 lin_constr = LinearConstraint(np.identity(2*N_turb), np.tile((xmin,ymin),N_turb), np.tile((xmax,ymax),N_turb))
  
@@ -587,8 +591,8 @@ N_x = 240
 N_y = 240
 #x_grid = np.linspace(-N_x/2,N_x/2,N_x)
 #y_grid = np.linspace(-N_y/2,N_y/2,N_y)
-x_grid = np.linspace(-600, 600, N_x)
-y_grid = np.linspace(-600, 600, N_y)
+x_grid = np.linspace(-50*R0[0], 50*R0[0], N_x)
+y_grid = np.linspace(-50*R0[0], 50*R0[0], N_y)
 
 U = np.mean(cop_evals_physical[0,:])
 wind_dir = np.mean(cop_evals_physical[1,:])*np.pi/180.
@@ -644,10 +648,10 @@ plt.title('Wind speed, opt. locations')
 ###
 fig1 = plt.figure(constrained_layout=True) #JOH
 fig1.set_size_inches(4.2, 3.5) #JOH
-
-cset = plt.contourf(xv, yv, u_eval_optim.T, cmap=cm.coolwarm)
-plt.scatter(x_all[:,0], x_all[:,1], s=50, c='black', marker='+')
-plt.scatter(x_opt[:,0], x_opt[:,1], s=30, c='black', marker='o')
+im1= plt.imshow(u_eval_optim.T, interpolation='antialiased', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, vmin=4.0, vmax=10.5, origin='lower', aspect='auto')
+#cset = plt.contourf(xv, yv, u_eval_optim.T, cmap=cm.coolwarm)
+#plt.scatter(x_all[:,0], x_all[:,1], s=50, c='black', marker='+')
+#plt.scatter(x_opt[:,0], x_opt[:,1], s=30, c='black', marker='o')
 plt.plot([xmin, xmin], [ymin, ymax], linestyle='dashed', color='black')
 plt.plot([xmax, xmax], [ymin, ymax], linestyle='dashed', color='black')
 plt.plot([xmin, xmax], [ymin, ymin], linestyle='dashed', color='black')
@@ -720,8 +724,8 @@ print("-------------------------------------------------------")
 #(xv, yv) = np.meshgrid(x_grid, y_grid)
 fig2 = plt.figure(constrained_layout=True)
 fig2.set_size_inches(4.2, 3.5)
-#im1= plt.imshow(u_eval_optim.T, interpolation='antialiased', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, vmin=4.0, vmax=10.5, origin='lower', aspect='auto')
-cset = plt.contourf(xv, yv, u_eval_optim.T, cmap=cm.coolwarm) #zdir='z', offset=25, cmap=cm.coolwarm)
+im1= plt.imshow(u_eval_optim.T, interpolation='antialiased', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, vmin=4.0, vmax=10.5, origin='lower', aspect='auto')
+#cset = plt.contourf(xv, yv, u_eval_optim.T, cmap=cm.coolwarm) #zdir='z', offset=25, cmap=cm.coolwarm)
 plt.scatter(x_all[:,0], x_all[:,1], s=50, c='black', marker='+')
 plt.scatter(x_opt[:,0], x_opt[:,1], s=30, c='black', marker='o')
 plt.plot([xmin, xmin], [ymin, ymax], linestyle='dashed', color='black')
