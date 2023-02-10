@@ -282,7 +282,42 @@ def objective_fun_num(x_vector, U, wind_dir, R0_loc, alpha, rho, U_cut_in, U_cut
     fun_param = U, wind_dir, R0_loc, alpha, rho, U_cut_in, U_cut_out, C_p
     return calc_total_P(x_vector, *fun_param), calc_partial(calc_total_P, x_vector, fun_param)
 
+def cons_c(x_vector, c_J_ind):
+    N_turb = int(len(x_vector)/2.)
+    x = x_vector.reshape((N_turb, 2))
     
+    num_con, _ = np.shape(c_J_ind)
+    cons = np.zeros(num_con)
+    for row_ind in range(num_con):
+        q = int(c_J_ind[row_ind,0])
+        m = int(c_J_ind[row_ind,1])
+        
+        cons[row_ind] = (x_vector[2*q]-x_vector[2*m])**2 + (x_vector[2*q+1]-x_vector[2*m+1])**2
+        #cons[row_ind] = (x[q,0]-x[m,0])**2 + (x[q,1]-x[m,1])**2
+    return cons
+ 
+
+def cons_J(x_vector, c_J_ind):
+    N_turb = int(len(x_vector)/2.)
+    x = x_vector.reshape((N_turb, 2))
+    
+    num_con, _ = np.shape(c_J_ind)
+    Jac = np.zeros((num_con,N_turb*2))
+    
+    for row_ind in range(num_con):
+        q = int(c_J_ind[row_ind,0])
+        m = int(c_J_ind[row_ind,1])
+        
+        Jac[row_ind,2*q] = 2*(x[q,0]-x[m,0])
+        Jac[row_ind,2*q+1] = 2*(x[q,1]-x[m,1])
+        Jac[row_ind,2*m] = -2*(x[q,0]-x[m,0])
+        Jac[row_ind,2*m+1] = -2*(x[q,1]-x[m,1])
+        
+    return Jac
+    
+
+
+
 #pathName = '/Users/pepe/Documents/MATLAB/wind_Matlab/'
 #pathName = "C:/Users/jhel/" #'Documents/MATLAB/wind_Matlab/'
 pathName = '/home/AD.NORCERESEARCH.NO/olau/Documents/projects/DynPosWind/opt_farm/data/'
@@ -344,7 +379,9 @@ opt_tolerance_SLSQP = 5e-01
 maxiter_SLSQP = 200
 now = datetime.datetime.now()
 np.random.seed(0)
-rotorRadius = 120 #50.
+rotorRadius = 120. #50.
+
+wake_model_param = np.array([C_p, rho, U_cut_in, U_cut_out])
 
 
 # Independent uniforms
@@ -427,34 +464,6 @@ print("MC copula: ", np.mean(np.prod(copula_samples_from_unif, axis=0)))
 
 print("MC data: ", np.mean(np.prod(data_samples, axis=0)))
 
-"""
-# PP Feb 7: I think we can remove this part for cleanliness
-design_var = 180
-P_evals = test_obj(cop_evals_physical[0,:],cop_evals_physical[1,:], design_var)
-print("P_evals: ", P_evals)
-#print("np.shape(P_evals): ", np.shape(P_evals))
-
-for angle in np.arange(0, 360, 45):
-    design_var = angle
-    des_point_value = robust_design_func(design_var, cop_evals_physical, wts_2D)
-    print("angle, des_point_value: ", angle, " ", des_point_value)
-
-
-obj_fun_opt = functools.partial(robust_design_func, pts_phys=cop_evals_physical, wts=wts_2D)
-
-
-angle0 = 180
-
-print("test obj ", obj_fun_opt(angle0))
-res = minimize(obj_fun_opt, angle0, method='BFGS', jac=False, options={'disp': True}, constraints=None)
-
-print("res: ", res)
-
-design_opt = res.x[0]
-mu_SMC = np.mean(test_obj(u_data, theta_data, design_opt))
-sigma_SMC = np.std(test_obj(u_data, theta_data, design_opt))
-print("SMC: -(mu-sigma)", -(mu_SMC-sigma_SMC))
-"""
 
 
 
@@ -468,14 +477,14 @@ print("-------------------------------------------------------")
 # Coordinates of all wind turbines
 
 #x_all = np.array([[0.,0.]])
-#x_all = np.array([[0,0],[240,240]])
+x_all = np.array([[0,0],[240,240]])
 
 #x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100]])
 #x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100],[0,200],[0,-200],[200,0],[-200,0]])
 #x_all = np.array([[0,0],[20,20],[20,-20],[-20,20],[-20,-20],[0,40],[0,-40],[40,0],[-40,0],[40,40],[40,-40],[-40,40],[-40,-40]])
 #x_all = np.array([[0,0],[20,20],[20,-20],[-20,20],[-20,-20],[0,40],[0,-40],[40,0],[-40,0],[40,40],[40,-40],[-40,40],[-40,-40], [60,20],[60,-20],[-60,20],[-60,-20]])
 
-x_all = np.array([[-4500, 3000], [-2250, 3000], [0,3000], [2250, 3000], [4500,3000],[-4500, 1000], [-2250, 1000], [0,1000], [2250, 1000], [4500,1000], [-4500, -1000], [-2250, -1000], [0, -1000], [2250, -1000], [4500, -1000], [-4500, -3000], [-2250, -3000], [0,-3000], [2250, -3000], [4500,-3000]])
+#x_all = np.array([[-4500, 3000], [-2250, 3000], [0,3000], [2250, 3000], [4500,3000],[-4500, 1000], [-2250, 1000], [0,1000], [2250, 1000], [4500,1000], [-4500, -1000], [-2250, -1000], [0, -1000], [2250, -1000], [4500, -1000], [-4500, -3000], [-2250, -3000], [0,-3000], [2250, -3000], [4500,-3000]])
 #x_all = np.array([[-2000, 2500],[-1000,2500],[0,2500],[1000, 2500],[2000, 2500]])
 print("x_all.shape", x_all.shape)
 
@@ -531,6 +540,8 @@ xmax = 5000 #41.6667*R0[0]#-375 #250
 ymin = -3000 #-25*R0[0]#-250
 ymax = 3000#25*R0[0]#250
 
+confinement_rectangle = np.array([xmin, ymin, xmax, ymax]) 
+
 lin_constr = LinearConstraint(np.identity(2*N_turb), np.tile((xmin,ymin),N_turb), np.tile((xmax,ymax),N_turb))
  
 N_c_J = np.arange(0,N_turb)
@@ -545,38 +556,6 @@ for first_ind in N_c_J:
 print("c_J_ind: ", c_J_ind)
 
 
-def cons_c(x_vector, c_J_ind):
-    N_turb = int(len(x_vector)/2.)
-    x = x_vector.reshape((N_turb, 2))
-    
-    num_con, _ = np.shape(c_J_ind)
-    cons = np.zeros(num_con)
-    for row_ind in range(num_con):
-        q = int(c_J_ind[row_ind,0])
-        m = int(c_J_ind[row_ind,1])
-        
-        cons[row_ind] = (x_vector[2*q]-x_vector[2*m])**2 + (x_vector[2*q+1]-x_vector[2*m+1])**2
-        #cons[row_ind] = (x[q,0]-x[m,0])**2 + (x[q,1]-x[m,1])**2
-    return cons
- 
-
-def cons_J(x_vector, c_J_ind):
-    N_turb = int(len(x_vector)/2.)
-    x = x_vector.reshape((N_turb, 2))
-    
-    num_con, _ = np.shape(c_J_ind)
-    Jac = np.zeros((num_con,N_turb*2))
-    
-    for row_ind in range(num_con):
-        q = int(c_J_ind[row_ind,0])
-        m = int(c_J_ind[row_ind,1])
-        
-        Jac[row_ind,2*q] = 2*(x[q,0]-x[m,0])
-        Jac[row_ind,2*q+1] = 2*(x[q,1]-x[m,1])
-        Jac[row_ind,2*m] = -2*(x[q,0]-x[m,0])
-        Jac[row_ind,2*m+1] = -2*(x[q,1]-x[m,1])
-        
-    return Jac
 
 
 
@@ -595,7 +574,7 @@ x_grid = np.linspace(-50*R0[0], 50*R0[0], N_x)
 y_grid = np.linspace(-50*R0[0], 50*R0[0], N_y)
 
 U = np.mean(cop_evals_physical[0,:])
-wind_dir = np.mean(cop_evals_physical[1,:])*np.pi/180.
+wind_dir = np.mean(cop_evals_physical[1,:])*np.pi/180. + np.pi
 
 
 u_eval = np.zeros((N_x, N_y))
@@ -617,11 +596,15 @@ obj_fun = functools.partial(objective_fun_num_robust_design, pts=cop_evals_physi
 #res = minimize(obj_fun, x_vector, method='SLSQP', jac=True, options={'disp': True}, constraints=[lin_constr, nonlinear_constraint]) #constraints=lin_constr) 
 res = minimize(obj_fun, x_vector, method='SLSQP', jac=True, options={'disp': True, 'ftol': opt_tolerance_SLSQP, 'maxiter': maxiter_SLSQP}, constraints=[lin_constr, nonlinear_constraint]) # default: 'ftol': 1e-06
 
+fileName = pathName+'arrays1/Robust_design_Nturb_' + str(N_turb)  + '_Nq(sp,dir)_' + str(Nq_sp) +'_'+str(Nq_dir) + '.npz'
+np.savez(fileName, init_pos=x_vector, end_pos=res.x, rotor_rad=R0, wake_param=wake_model_param, confine_rectangle = confinement_rectangle)
+
 x_opt = np.reshape(res.x, (N_turb,2))
 print("Initial turbine locations: ", x_vector)
-print("Robust design, New turbine locations: ", res.x)
-print("Test ----------- Test")
 print("Objective fun value, init: ", obj_fun(x_vector))
+
+print("Robust design, New turbine locations: ", res.x)
+
 print("Objective fun value, opt: ", res.fun)
 for ix in range(N_x):
     for iy in range(N_y):
@@ -682,8 +665,9 @@ plt.title('Robust design') #('Wind speed, opt. locations')
 figname = pathName+'figures3/Robust_design_Nturb_' + str(N_turb)  + '_Nq(sp,dir)_' + str(Nq_sp) +'_'+str(Nq_dir) + '.png'
 plt.savefig(figname)
 
-now = datetime.datetime.now()
 print("-------------------------------------------------------")
+print('start time: ', now)
+now = datetime.datetime.now()
 print('end Robust design time: ', now)
 print("-------------------------------------------------------")
 
