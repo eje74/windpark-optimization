@@ -90,32 +90,47 @@ def repeat_product(x, y):
     return np.transpose([np.repeat(x, len(y)),
                             np.tile(y, len(x))])   
 
-def windDataGeneration(Nq_sp_plot, Nq_dir_plot):
 
+def copulaGeneration():
     theta_data  = np.loadtxt(pathName + 'Dir_100m_2016_2017_2018.txt')
     u_data  = np.loadtxt(pathName + 'Sp_100m_2016_2017_2018.txt')
 
     theta_data[theta_data<0] = theta_data[theta_data<0] + 360
     theta_data[theta_data>360] = theta_data[theta_data>360] - 360
 
-    data_samples = np.array([u_data, theta_data])
+    data_samples_loc = np.array([u_data, theta_data])
+
+    # Instantiate copula object from precomputed model saved to file
+    copula_loc = pv.Vinecop(filename = pathName + 'copula_tree_100m_2016_2017_2018.txt', check=True)
+
+    return copula_loc, data_samples_loc
+
+def windDataGeneration(copula_loc, data_samples_loc, Nq_sp_loc, Nq_dir_loc):
+
+  
+
+    print('shape:',data_samples_loc.shape)
+    u_data = data_samples_loc[0,:]
+    #theta_data = data_samples_loc[1,:]
+
+    #u_data = data_samples
 
     # Instantiate copula object from precomputed model saved to file
     copula = pv.Vinecop(filename = pathName + 'copula_tree_100m_2016_2017_2018.txt', check=True)
-    print(copula)
+    #print(copula)
 
-    num_samples = 26304 #Number of model evaluations
-    num_dim = 2
+    num_samples = data_samples_loc.shape[1] #Number of model evaluations
+    num_dim = data_samples_loc.shape[0]
 
     # Independent uniforms
     u_samples_ind = np.random.uniform(low=0, high=1, size=(num_samples, num_dim))
 
     # Sample copula via inverse Rosenblatt
-    cop_samp_from_ind = copula.inverse_rosenblatt(u_samples_ind)
+    cop_samp_from_ind = copula_loc.inverse_rosenblatt(u_samples_ind)
 
 
     # Transform back simulations to the original scale
-    copula_samples_from_unif = np.asarray([np.quantile(data_samples[i,:], cop_samp_from_ind[:, i]) for i in range(0, num_dim)])
+    copula_samples_from_unif = np.asarray([np.quantile(data_samples_loc[i,:], cop_samp_from_ind[:, i]) for i in range(0, num_dim)])
 
 
     # Construct quadrature rule for expectation operators
@@ -131,14 +146,13 @@ def windDataGeneration(Nq_sp_plot, Nq_dir_plot):
 
     # Set number of quadrature points for the regions 1 ([U_cut_in, U_cut_out]) and 2 ([U_cut_out, infty])
     # in speed (sp) and direction (dir)
-    Nq_sp = np.array([5,3])
-    Nq_dir = np.array([10,10])
+    
 
-    [pts_sp_1, wts_sp_1] = np.polynomial.legendre.leggauss(Nq_sp[0])
-    [pts_dir_1, wts_dir_1] = np.polynomial.legendre.leggauss(Nq_dir[0])
+    [pts_sp_1, wts_sp_1] = np.polynomial.legendre.leggauss(Nq_sp_loc[0])
+    [pts_dir_1, wts_dir_1] = np.polynomial.legendre.leggauss(Nq_dir_loc[0])
 
-    [pts_sp_2, wts_sp_2] = np.polynomial.legendre.leggauss(Nq_sp[1])
-    [pts_dir_2, wts_dir_2] = np.polynomial.legendre.leggauss(Nq_dir[1])
+    [pts_sp_2, wts_sp_2] = np.polynomial.legendre.leggauss(Nq_sp_loc[1])
+    [pts_dir_2, wts_dir_2] = np.polynomial.legendre.leggauss(Nq_dir_loc[1])
 
     # Rescale to unit interval, and weights summing to 1
     pts_sp_1 = (pts_sp_1+1)/2.
@@ -171,15 +185,20 @@ def windDataGeneration(Nq_sp_plot, Nq_dir_plot):
 
 
     # Evaluate copula via inverse Rosenblatt
-    cop_evals = copula.inverse_rosenblatt(pts_2D.T)
+    cop_evals = copula_loc.inverse_rosenblatt(pts_2D.T)
 
     # Transform back evaluations to the original scale
-    cop_evals_physical = np.asarray([np.quantile(data_samples[i,:], cop_evals[:, i]) for i in range(0, num_dim)])
+    cop_evals_physical = np.asarray([np.quantile(data_samples_loc[i,:], cop_evals[:, i]) for i in range(0, num_dim)])
 
+    print('windDataGeneration() done')
+
+    return cop_evals_physical[0,:], cop_evals_physical[1,:]*np.pi/180. + np.pi, wts_2D
 
     ######################################################################################################
 
-    
+def windDataGenerationPlot(copula_loc, data_samples_loc, Nq_sp_plot, Nq_dir_plot):
+
+    num_dim = data_samples_loc.shape[0]
 
     [pts_sp_plot, wts_sp_plot] = np.polynomial.legendre.leggauss(Nq_sp_plot)
     [pts_dir_plot, wts_dir_plot] = np.polynomial.legendre.leggauss(Nq_dir_plot)
@@ -200,10 +219,10 @@ def windDataGeneration(Nq_sp_plot, Nq_dir_plot):
     #print("pts_2D: ", pts_2D)
 
     # Evaluate copula via inverse Rosenblatt
-    cop_evals_plot = copula.inverse_rosenblatt(pts_2D_plot.T)
+    cop_evals_plot = copula_loc.inverse_rosenblatt(pts_2D_plot.T)
 
     # Transform back evaluations to the original scale
-    cop_evals_physical_plot = np.asarray([np.quantile(data_samples[i,:], cop_evals_plot[:, i]) for i in range(0, num_dim)])
+    cop_evals_physical_plot = np.asarray([np.quantile(data_samples_loc[i,:], cop_evals_plot[:, i]) for i in range(0, num_dim)])
 
 
 
@@ -211,7 +230,7 @@ def windDataGeneration(Nq_sp_plot, Nq_dir_plot):
 
     #######################################################################################################
 
-    print('test')
+    print('windDataGenerationPlot() done')
 
     return cop_evals_physical_plot[0,:], cop_evals_physical_plot[1,:]*np.pi/180. + np.pi, wts_2D_plot
 
@@ -234,11 +253,25 @@ alpha = 1/3.
 #
 N_turb = 2
 
+Nq_sp = np.array([5,3])
+Nq_dir = np.array([10,10])
+
+
+Nq_sp_plot = 10#10
+Nq_dir_plot = 10#15 
+
+
+print("test: ", str(Nq_sp) )
+
 pathName = '/home/AD.NORCERESEARCH.NO/olau/Documents/projects/DynPosWind/opt_farm/data/'
-fileName = pathName+'arrays1/Robust_design_Nturb_' + str(2)  + '_Nq(sp,dir)_' + '[5 3]' +'_'+ '[10 10]' + '.npz'
+fileName = pathName+'arrays1/Robust_design_Nturb_' + str(N_turb)  + '_Nq(sp,dir)_' + str(Nq_sp) +'_'+ str(Nq_dir) + '.npz'
 
 npzfile = np.load(fileName)
 print('Tag names of saved arrays:', npzfile.files)
+
+
+copula, data_samples = copulaGeneration()
+
 
 
 init_pos = npzfile['init_pos']
@@ -277,9 +310,9 @@ N_y = 100
 x_grid = np.linspace(-50*R0[0], 50*R0[0], N_x)
 y_grid = np.linspace(-50*R0[0], 50*R0[0], N_y)
 
-#U, wind_dir = windDataGeneration()
-U = 10
-wind_dir = 0
+Utmp, wind_dir_tmp, _ = windDataGeneration(copula, data_samples, Nq_sp, Nq_dir)
+U = np.mean(Utmp)
+wind_dir = np.mean(wind_dir_tmp)
 
 u_eval = np.zeros((N_x, N_y))
 delta_u_eval = np.zeros((N_turb, N_x, N_y))
@@ -303,8 +336,8 @@ for ix in range(N_x):
 
 
 
-fig1 = plt.figure(constrained_layout=True) #JOH
-fig1.set_size_inches(4.2, 3.5) #JOH
+fig1 = plt.figure(constrained_layout=True) 
+fig1.set_size_inches(4.2, 3.5) 
 im1= plt.imshow(u_eval_optim.T, interpolation='antialiased', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, vmin=4.0, vmax=10.5, origin='lower', aspect='auto')
 #cset = plt.contourf(xv, yv, u_eval_optim.T, cmap=cm.coolwarm)
 #plt.scatter(x_all[:,0], x_all[:,1], s=50, c='black', marker='+')
@@ -336,13 +369,11 @@ plt.title('Robust design') #('Wind speed, opt. locations')
 
 
 
-Nq_sp_plot = 10#10
-Nq_dir_plot = 15#15 
 
 
 
 
-U, wind_dir, wts_2D_plot  = windDataGeneration(Nq_sp_plot, Nq_dir_plot)
+U, wind_dir, wts_2D_plot  = windDataGenerationPlot(copula, data_samples, Nq_sp_plot, Nq_dir_plot)
 
 
 u_eval_optim *=0
