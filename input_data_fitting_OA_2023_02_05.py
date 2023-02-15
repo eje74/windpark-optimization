@@ -85,7 +85,7 @@ def objective_fun_num_robust_design(x_vector, pts, wts, R0_loc, alpha, rho, U_cu
         return mu+sigma_weight*sigma, grad_mu+sigma_weight*grad_sigma
     
     
-def power_ind_turbine(U, U_cut_in, U_cut_out, U_stop_loc, C_p, rho, R0_loc):
+def power_ind_turbine(U_loc, U_cut_in_loc, U_cut_out_loc, U_stop_loc, C_p_loc, rho_loc, R0_loc):
     """
     Compute power output of individual turbine
     Args:
@@ -99,12 +99,12 @@ def power_ind_turbine(U, U_cut_in, U_cut_out, U_stop_loc, C_p, rho, R0_loc):
         Power: the power of the individual turbine [what unit? what time horizon, annually?]
     """
     A = np.pi*R0_loc**2
-    if U < U_cut_in or U>U_stop_loc:
+    if U_loc < U_cut_in_loc or U_loc>U_stop_loc:
         Power = 0
-    elif U > U_cut_out:
-        Power = 0.5*rho*A*C_p*U_cut_out**3
+    elif U_loc > U_cut_out_loc:
+        Power = 0.5*rho_loc*A*C_p_loc*U_cut_out_loc**3
     else:
-        Power = 0.5*rho*A*C_p*U**3
+        Power = 0.5*rho_loc*A*C_p_loc*U_loc**3
     """
     print("U =", U)
     print("R0_loc =", R0_loc)
