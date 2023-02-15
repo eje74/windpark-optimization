@@ -257,8 +257,11 @@ Nq_sp = np.array([5,3])
 Nq_dir = np.array([10,10])
 
 
-Nq_sp_plot = 10#10
-Nq_dir_plot = 10#15 
+Nq_sp_plot = 5#10
+Nq_dir_plot = 20#15 
+
+VminPlot = 8
+VmaxPlot = 10
 
 
 print("test: ", str(Nq_sp) )
@@ -338,7 +341,7 @@ for ix in range(N_x):
 
 fig1 = plt.figure(constrained_layout=True) 
 fig1.set_size_inches(4.2, 3.5) 
-im1= plt.imshow(u_eval_optim.T, interpolation='antialiased', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, vmin=4.0, vmax=10.5, origin='lower', aspect='auto')
+im1= plt.imshow(u_eval_optim.T, interpolation='antialiased', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, origin='lower', aspect='auto')
 #cset = plt.contourf(xv, yv, u_eval_optim.T, cmap=cm.coolwarm)
 #plt.scatter(x_all[:,0], x_all[:,1], s=50, c='black', marker='+')
 #plt.scatter(x_opt[:,0], x_opt[:,1], s=30, c='black', marker='o')
@@ -363,13 +366,6 @@ fig.colorbar(im1)
 plt.xlabel('$X\ [\mathrm{m}]$')
 plt.ylabel('$Y\ [\mathrm{m}]$', rotation=90)
 plt.title('Robust design') #('Wind speed, opt. locations')
-
-
-
-
-
-
-
 
 
 
@@ -412,7 +408,7 @@ fig.set_size_inches(4.0, 4.0)
 #norm = colors.BoundaryNorm(bounds, cmap.N)
 ###
 
-im1= plt.imshow(u_eval_optim.T, interpolation='nearest', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, vmin=6.0, vmax=12.0, origin='lower', aspect='auto')
+im1= plt.imshow(u_eval_optim.T, interpolation='nearest', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, vmin=VminPlot, vmax=VmaxPlot, origin='lower', aspect='auto')
 # interpolation='bicubic' 'antialiased'
 #plt.scatter(x_all[:,0], x_all[:,1], s=50, c='blue', marker='+')
 fig.colorbar(im1)
@@ -435,9 +431,9 @@ plt.ylabel('$Y$ [m]', rotation=0)
 fig1 = plt.figure(constrained_layout=True) #JOH
 fig1.set_size_inches(4.2, 3.5) #JOH
 cmap=plt.cm.coolwarm #([0,0.1,0.2,0.4,0.7,1])
-figLevels = np.linspace(6, 12, 12)
+figLevels = np.linspace(VminPlot, VmaxPlot, 12)
 # [4,5,6,7,8,9.5] [0.1,0.2,0.3,0.4,0.5,0.6,0.7, 0.95]
-im1= plt.imshow(u_eval_optim.T, interpolation='nearest', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, vmin=6.0, vmax=12, origin='lower', aspect='auto')
+im1= plt.imshow(u_eval_optim.T, interpolation='nearest', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, vmin=VminPlot, vmax=VmaxPlot, origin='lower', aspect='auto')
 cset = plt.contourf(xv, yv, u_eval_optim.T, levels=figLevels, cmap=cmap)
 #plt.scatter(x_all[:,0], x_all[:,1], s=50, c='black', marker='+')
 #plt.scatter(x_opt[:,0], x_opt[:,1], s=30, c='black', marker='o')

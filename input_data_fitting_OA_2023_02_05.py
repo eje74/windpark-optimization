@@ -45,7 +45,7 @@ def robust_design_func(design_var, pts_phys, wts):
     
 
 
-def objective_fun_num_robust_design(x_vector, pts, wts, R0_loc, alpha, rho, U_cut_in, U_cut_out, C_p):
+def objective_fun_num_robust_design(x_vector, pts, wts, R0_loc, alpha, rho, U_cut_in, U_cut_out, U_stop, C_p):
     sigma_weight = 0.1
     Nq = len(wts)
     N_turb = int(len(x_vector)/2.)
@@ -56,7 +56,7 @@ def objective_fun_num_robust_design(x_vector, pts, wts, R0_loc, alpha, rho, U_cu
     for q in range(Nq):
         U = pts[0,q]
         wind_dir = pts[1,q]*np.pi/180
-        fun_param = U, wind_dir, R0_loc, alpha, rho, U_cut_in, U_cut_out, C_p
+        fun_param = U, wind_dir, R0_loc, alpha, rho, U_cut_in, U_cut_out, U_stop, C_p
         P_evals[q] = calc_total_P(x_vector, *fun_param)
         #temp = calc_partial(calc_total_P, x_vector, fun_param)
         dPdx_evals[q,:] =  calc_partial(calc_total_P, x_vector, fun_param)
@@ -85,7 +85,7 @@ def objective_fun_num_robust_design(x_vector, pts, wts, R0_loc, alpha, rho, U_cu
         return mu+sigma_weight*sigma, grad_mu+sigma_weight*grad_sigma
     
     
-def power_ind_turbine(U, U_cut_in, U_cut_out, C_p, rho, R0_loc):
+def power_ind_turbine(U, U_cut_in, U_cut_out, U_stop_loc, C_p, rho, R0_loc):
     """
     Compute power output of individual turbine
     Args:
@@ -99,7 +99,7 @@ def power_ind_turbine(U, U_cut_in, U_cut_out, C_p, rho, R0_loc):
         Power: the power of the individual turbine [what unit? what time horizon, annually?]
     """
     A = np.pi*R0_loc**2
-    if U < U_cut_in:
+    if U < U_cut_in or U>U_stop_loc:
         Power = 0
     elif U > U_cut_out:
         Power = 0.5*rho*A*C_p*U_cut_out**3
@@ -227,7 +227,7 @@ def averaged_wind_speed(x_i, x_all, U, wind_dir, D_loc, R0_loc):
 
     return u_averaged, delta_u_averaged
     
-def calc_total_P(x_vector, U, wind_dir, R0_loc, alpha, rho, U_cut_in, U_cut_out, C_p):
+def calc_total_P(x_vector, U, wind_dir, R0_loc, alpha, rho, U_cut_in, U_cut_out, U_stop, C_p):
     #print("Checking x_vector: ", np.shape(x_vector))
     #    np.atleast_1d(
     N_turb = int(np.shape(x_vector)[0]/2.)
@@ -250,7 +250,7 @@ def calc_total_P(x_vector, U, wind_dir, R0_loc, alpha, rho, U_cut_in, U_cut_out,
 
         delta_u_ij[i,:] = delta_uij_temp.T
     
-        p_i[i] = power_ind_turbine(u_i, U_cut_in, U_cut_out, C_p, rho, R0_loc[i])
+        p_i[i] = power_ind_turbine(u_i, U_cut_in, U_cut_out, U_stop, C_p, rho, R0_loc[i])
         
     return -np.sum(p_i)
 
@@ -278,8 +278,8 @@ def calc_partial(fun, x, fun_param, dl=0.1):
     #NBNBNBNBNBNBNBNBNB slutt
     return dP
     
-def objective_fun_num(x_vector, U, wind_dir, R0_loc, alpha, rho, U_cut_in, U_cut_out, C_p):
-    fun_param = U, wind_dir, R0_loc, alpha, rho, U_cut_in, U_cut_out, C_p
+def objective_fun_num(x_vector, U, wind_dir, R0_loc, alpha, rho, U_cut_in, U_cut_out, U_stop, C_p):
+    fun_param = U, wind_dir, R0_loc, alpha, rho, U_cut_in, U_cut_out, U_stop, C_p
     return calc_total_P(x_vector, *fun_param), calc_partial(calc_total_P, x_vector, fun_param)
 
 def cons_c(x_vector, c_J_ind):
@@ -362,8 +362,8 @@ num_dim = 2
 
 # Some physical/technical parameters must be introduced already here
 # Induction factor alpha, based on the actuator disc model
-# Note that alpha=(U-U_R)/U, so the actual wind speeds upstream and downstream of the disc should be used
 alpha = 0.3333333
+# Note that alpha=(U-U_R)/U, so the actual wind speeds upstream and downstream of the disc should be used
 
 U_cut_in = 3 #5
 U_cut_out = 10.59 #10 #25 #20
@@ -398,9 +398,16 @@ copula_samples_from_unif = np.asarray([np.quantile(data_samples[i,:], cop_samp_f
 # Construct quadrature rule for expectation operators
 # Divide parameter domain w.r.t. U_cut_in and U_cut_off
 # Introduce point probability masses, and local GQ
-p_0 = np.sum(u_data < U_cut_in)/num_samples
+
+
+p_0 = np.sum((u_data < U_cut_in) | (u_data >= U_stop))/num_samples
 ind_var_s = (u_data < U_cut_out) & (u_data >= U_cut_in)
-ind_con_s = u_data >= U_cut_out
+ind_con_s = (u_data >= U_cut_out) & (u_data < U_stop)
+
+#p_0 = np.sum(u_data < U_cut_in)/num_samples
+#ind_var_s = (u_data < U_cut_out) & (u_data >= U_cut_in)
+#ind_con_s = u_data >= U_cut_out
+
 p_1 = np.sum(ind_var_s)/num_samples
 p_2 = np.sum(ind_con_s)/num_samples
 
@@ -573,7 +580,7 @@ N_y = 240
 x_grid = np.linspace(-50*R0[0], 50*R0[0], N_x)
 y_grid = np.linspace(-50*R0[0], 50*R0[0], N_y)
 
-U = np.mean(cop_evals_physical[0,:])
+U = 2.0 #np.mean(cop_evals_physical[0,:])
 wind_dir = np.mean(cop_evals_physical[1,:])*np.pi/180. + np.pi
 
 
@@ -587,11 +594,11 @@ delta_u_eval_optim = np.zeros((N_turb, N_x, N_y))
 print("-----------")
 print("Initial turbine Production: ")
 print("-----------")
-objective_fun_num_robust_design(x_vector, pts=cop_evals_physical, wts=wts_2D, R0_loc=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, C_p=C_p) # OLAV 
+objective_fun_num_robust_design(x_vector, pts=cop_evals_physical, wts=wts_2D, R0_loc=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, U_stop=U_stop, C_p=C_p) # OLAV 
 print("-----------")
 
 
-obj_fun = functools.partial(objective_fun_num_robust_design, pts=cop_evals_physical, wts=wts_2D, R0_loc=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, C_p=C_p)
+obj_fun = functools.partial(objective_fun_num_robust_design, pts=cop_evals_physical, wts=wts_2D, R0_loc=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, U_stop=U_stop, C_p=C_p)
 
 #res = minimize(obj_fun, x_vector, method='SLSQP', jac=True, options={'disp': True}, constraints=[lin_constr, nonlinear_constraint]) #constraints=lin_constr) 
 res = minimize(obj_fun, x_vector, method='SLSQP', jac=True, options={'disp': True, 'ftol': opt_tolerance_SLSQP, 'maxiter': maxiter_SLSQP}, constraints=[lin_constr, nonlinear_constraint]) # default: 'ftol': 1e-06
@@ -619,7 +626,7 @@ for ix in range(N_x):
 fig = plt.figure(constrained_layout=True)
 fig.set_size_inches(4.0, 4.0)
 #cmap2 = plt.get_cmap("jet")
-im1= plt.imshow(u_eval_optim.T, interpolation='antialiased', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, vmin=4.0, vmax=10.5, origin='lower', aspect='auto')
+im1= plt.imshow(u_eval_optim.T, interpolation='antialiased', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, origin='lower', aspect='auto')
 # interpolation='bicubic'
 plt.scatter(x_all[:,0], x_all[:,1], s=50, c='blue', marker='+')
 fig.colorbar(im1)
@@ -631,7 +638,7 @@ plt.title('Wind speed, opt. locations')
 ###
 fig1 = plt.figure(constrained_layout=True) #JOH
 fig1.set_size_inches(4.2, 3.5) #JOH
-im1= plt.imshow(u_eval_optim.T, interpolation='antialiased', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, vmin=4.0, vmax=10.5, origin='lower', aspect='auto')
+im1= plt.imshow(u_eval_optim.T, interpolation='antialiased', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, origin='lower', aspect='auto')
 #cset = plt.contourf(xv, yv, u_eval_optim.T, cmap=cm.coolwarm)
 #plt.scatter(x_all[:,0], x_all[:,1], s=50, c='black', marker='+')
 #plt.scatter(x_opt[:,0], x_opt[:,1], s=30, c='black', marker='o')
@@ -676,7 +683,7 @@ print("-------------------------------------------------------")
 print("-------------------------------------------------------")
 print("---------------HER BEGYNNER MEAN-OPT:-------------------")
 
-obj_fun = functools.partial(objective_fun_num, U=U,wind_dir=wind_dir, R0_loc=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, C_p=C_p)
+obj_fun = functools.partial(objective_fun_num, U=U,wind_dir=wind_dir, R0_loc=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, U_stop=U_stop, C_p=C_p)
 
 
 res = minimize(obj_fun, x_vector, method='SLSQP', jac=True, options={'disp': True, 'ftol': opt_tolerance_SLSQP, 'maxiter': maxiter_SLSQP}, constraints=[lin_constr, nonlinear_constraint]) #constraints=lin_constr)
@@ -684,7 +691,7 @@ x_opt = np.reshape(res.x, (N_turb,2))
 
 print("-------------------------------------------------------")
 print("---------------HER KOMMER TALLENE VI TRENGER:-------------------")
-objective_fun_num_robust_design(res.x, pts=cop_evals_physical, wts=wts_2D, R0_loc=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, C_p=C_p) # OLAV 
+objective_fun_num_robust_design(res.x, pts=cop_evals_physical, wts=wts_2D, R0_loc=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, U_stop=U_stop, C_p=C_p) # OLAV 
 #obj_fun = functools.partial(objective_fun_num_robust_design, pts=cop_evals_physical, wts=wts_2D, R0=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, C_p=C_p)
 
 print("Initial turbine locations: ", x_vector)
@@ -708,7 +715,7 @@ print("-------------------------------------------------------")
 #(xv, yv) = np.meshgrid(x_grid, y_grid)
 fig2 = plt.figure(constrained_layout=True)
 fig2.set_size_inches(4.2, 3.5)
-im1= plt.imshow(u_eval_optim.T, interpolation='antialiased', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, vmin=4.0, vmax=10.5, origin='lower', aspect='auto')
+im1= plt.imshow(u_eval_optim.T, interpolation='antialiased', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, origin='lower', aspect='auto')
 #cset = plt.contourf(xv, yv, u_eval_optim.T, cmap=cm.coolwarm) #zdir='z', offset=25, cmap=cm.coolwarm)
 plt.scatter(x_all[:,0], x_all[:,1], s=50, c='black', marker='+')
 plt.scatter(x_opt[:,0], x_opt[:,1], s=30, c='black', marker='o')
@@ -756,149 +763,3 @@ plt.show()
       
 exit(1)
 
-wind_dirs = np.array([0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75])*np.pi + 0.001
-    
-for wind_dir in wind_dirs:
-    obj_fun = functools.partial(objective_fun_num, U=U,wind_dir=wind_dir, R0=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, C_p=C_p)
-    res = minimize(obj_fun, x_vector, method='SLSQP', jac=True, options={'disp': True}, constraints=lin_constr)
-
-
-    print("Initial turbine locations: ", x_vector)
-    print("New turbine locations: ", res.x)
-
-    for ix in range(N_x):
-        for iy in range(N_y):
-            x_i = (x_grid[ix], y_grid[iy])
-
-            u_eval_optim[ix,iy], temp = wind_speed_due_to_wake(x_i, np.reshape(res.x, (N_turb,2)), U, wind_dir, D, r_i = 0, theta_i = 0)
-            delta_u_eval_optim[:,ix,iy] = temp.flatten()
-    
-    fig = plt.figure(constrained_layout=False)
-    (xv, yv) = np.meshgrid(x_grid, y_grid)
-    ax = fig.add_subplot(111, projection='3d')
-    surf = ax.plot_surface(xv, yv, u_eval_optim.T, cmap=plt.cm.coolwarm)
-    cset = ax.contourf(xv, yv, u_eval_optim.T, zdir='z', offset=25, cmap=cm.coolwarm)
-
-
-    fig.colorbar(surf)
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_title('Wind speed, opt. locations')
-    ax.azim = -90
-    #ax.dist = 10
-    ax.elev = 90
-
-plt.show()
-      
-#exit(1)
-
-
-
-
-
-
-# Visualization
-fig, ax = plt.subplots(nrows=2, ncols=3, sharex=True, sharey=True, constrained_layout=True)
-
-fig.set_size_inches(6.0, 6.0)
-    
-print("Shapes samples " ,np.shape(data_samples), np.shape(copula_samples_from_unif))
-        
-ax[0,0].scatter(data_samples[0,:], data_samples[1,:], s=1)
-ax[0,0].set_title("Data samples")
-
-ax[0,1].scatter(copula_samples_from_unif[0,:], copula_samples_from_unif[1,:], s=1)
-ax[0,1].set_title("Model samples")
-
-#for pair in itertools.combinations((data_samples[0,:],data_samples[1,:]), 2):
- #   ax[0,2].scatter(pair[0], pair[1], s=1)
-
-cart_data = repeat_product(copula_samples_from_unif[0,0::20], copula_samples_from_unif[1,0::20]).T
-
-print("Size indep: ", np.shape(cart_data))
-
-ax[0,2].scatter(cart_data[0,:], cart_data[1,:], s=1)
-ax[0,2].set_title("Indep. samples")
-#plt.show()
-#exit(1)
-
-x = data_samples[0,:]
-y = data_samples[1,:]
-xmin, xmax = np.amin(x), np.amax(x)
-ymin, ymax = np.amin(y), np.amax(y)
-    
-# Peform the kernel density estimate
-xx, yy = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
-positions = np.vstack([xx.ravel(), yy.ravel()])
-values = np.vstack([x, y])
-kernel = stats.gaussian_kde(values)
-f_data = np.reshape(kernel(positions).T, xx.shape)
-
-ax[1,0].set_xlim(xmin, xmax)
-ax[1,0].set_ylim(ymin, ymax)
-# Contourf plot
-cfset = ax[1,0].contourf(xx, yy, f_data, cmap='Reds')
-## Or kernel density estimate plot instead of the contourf plot
-#ax.imshow(np.rot90(f), cmap='Blues', extent=[xmin, xmax, ymin, ymax])
-# Contour plot
-cset = ax[1,0].contour(xx, yy, f_data, colors='k')
-ax[1,0].set_title("PDF data")
-
-x = copula_samples_from_unif[0,:]
-y = copula_samples_from_unif[1,:]
-    
-values = np.vstack([x, y])
-kernel = stats.gaussian_kde(values)
-f_copula = np.reshape(kernel(positions).T, xx.shape)
-
-    
-ax[1,1].set_xlim(xmin, xmax)
-ax[1,1].set_ylim(ymin, ymax)
-# Contourf plot
-cfset = ax[1,1].contourf(xx, yy, f_copula, cmap='Greens')
-## Or kernel density estimate plot instead of the contourf plot
-#ax.imshow(np.rot90(f), cmap='Blues', extent=[xmin, xmax, ymin, ymax])
-# Contour plot
-cset = ax[1,1].contour(xx, yy, f_copula, colors='k')
-ax[1,1].set_title("PDF copula")
-
-
-# Treating as independent data
-
-x = cart_data[0,:]
-y = cart_data[1,:]
-values = np.vstack([x, y])
-kernel = stats.gaussian_kde(values)
-f_indep = np.reshape(kernel(positions).T, xx.shape)
-
-ax[1,2].set_xlim(xmin, xmax)
-ax[1,2].set_ylim(ymin, ymax)
-# Contourf plot
-cfset = ax[1,2].contourf(xx, yy, f_indep, cmap='Blues')
-## Or kernel density estimate plot instead of the contourf plot
-#ax.imshow(np.rot90(f), cmap='Blues', extent=[xmin, xmax, ymin, ymax])
-# Contour plot
-cset = ax[1,2].contour(xx, yy, f_indep, colors='k')
-ax[1,2].set_title("PDF independent data")
-
-
-#calculate (Q || P)
-P = f_data
-Q = f_copula
-f_data = f_data/sum(sum(f_data))
-f_copula = f_copula/sum(sum(f_copula))
-f_indep = f_indep/sum(sum(f_indep))
-#print("" sum(rel_entr(Q, P)))
-print("rel_entr(f_data, f_copula): ", sum(sum(rel_entr(f_data, f_copula))))
-print("rel_entr(f_copula, f_data): ", sum(sum(rel_entr(f_copula, f_data))))
-
-print("rel_entr(f_data, f_indep): ", sum(sum(rel_entr(f_data, f_indep))))
-print("rel_entr(f_indep, f_data): ", sum(sum(rel_entr(f_indep, f_data))))
-
-print("Sums to unity? ", sum(sum(f_data)), sum(sum(f_copula)), sum(sum(f_indep)) )
-
-np.savetxt(pathName + "copula_test_26304_samples.txt", copula_samples_from_unif, fmt="%s")
-
-#np.savetxt(pathName + "indep_data_samples.txt", cart_data, fmt="%s")
-
-plt.show()
