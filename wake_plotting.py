@@ -338,7 +338,6 @@ for ix in range(N_x):
 (xv, yv) = np.meshgrid(x_grid, y_grid)
 
 
-
 fig1 = plt.figure(constrained_layout=True) 
 fig1.set_size_inches(4.2, 3.5) 
 im1= plt.imshow(u_eval_optim.T, interpolation='antialiased', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, origin='lower', aspect='auto')
@@ -395,6 +394,10 @@ for ix in range(N_x):
     
 
 (xv, yv) = np.meshgrid(x_grid, y_grid)
+
+fileName = pathName+'arrays1/wake_mean' + str(N_turb)  + '_Nq(sp,dir)_' + str(Nq_sp) +'_'+str(Nq_dir) + '.npz'
+np.savez(fileName, u_eval=u_eval_optim, xv=xv, yv=yv)
+
 
 fig = plt.figure(constrained_layout=True)
 fig.set_size_inches(4.0, 4.0)
