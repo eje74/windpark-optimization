@@ -20,11 +20,25 @@ class Windfarm:
         turbine_positions : numpy.ndarray
             Turbine positions, assuming that the array shape = (3, N),
             where N is the number of turbines 
+        wind_direction : numpy.ndarray
+            Wind direction. (Will be normalized)
+        R : float (default = 63.0)
+            Actuator disk radius
+        Uin : float (default = 3.0)
+            Cut in wind speed. Minimum speed for power production
+        Uout : float (default = 12.0)
+            Cut out speed. Maxiumum power production
+        rho : float (default = 1.0)
+            Air density
+        kappa :
+            Wake expansion rate
+        alpha : float (default = 1/3)  
+            Induction factor
         """
         self.wind_direction = wind_direction/np.linalg.norm(wind_direction)
         self.wt_list = []
         for pos in turbine_positions.transpose():
-            self.wt_list.append(wtm.Turbine(*pos, wind_direction, R = 63, Uin = 3, Uout = 12, rho=1.0, kappa=0.05, alpha = 1/3))
+            self.wt_list.append(wtm.Turbine(*pos, wind_direction, R, Uin, Uout, rho, kappa, alpha))
 
     def power(self, U):
         power_tot = 0
@@ -67,7 +81,7 @@ class Windfarm:
 if __name__ == "__main__":
     print("Test wind farm model")
     # Make wind farm
-    N = 200 # Number of turbines
+    N = 20 # Number of turbines
     wind_direction = np.array([1, -1, 0])
     turbine_pos = np.zeros((3, N))
     from random import uniform
@@ -81,6 +95,7 @@ if __name__ == "__main__":
     # time the power calculation
     import time
     t0 = time.time_ns()
+    wf = Windfarm(turbine_pos, wind_direction)
     P_tot = wf.power(U)
     print("time = ", (time.time_ns()-t0)*1e-9, " sec")   
 
