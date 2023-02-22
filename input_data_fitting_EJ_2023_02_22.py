@@ -71,8 +71,7 @@ def objective_fun_num_robust_design(x_vector, pts, wts, R0_loc, alpha, rho, U_cu
 
     for q in range(Nq):
         U = pts[0,q]
-        ang = pts[1,q]*np.pi/180
-        wind_dir = np.array([np.cos(ang), np.sin(ang), 0])
+        wind_dir = pts[1,q]
         fun_param = wind_dir, R0_loc[0], U_cut_in, U_cut_out, rho, kappa , alpha, U
         P_evals[q] = calc_total_P(x_vector, *fun_param)
         #temp = calc_partial(calc_total_P, x_vector, fun_param)
@@ -253,7 +252,10 @@ def calc_total_P(x_vector, wind_dir, R, Uin, Uout, rho, kappa , alpha, U):
     wt_pos[0, :] = x_vector[::2]
     wt_pos[1, :] = x_vector[1::2]
 
-    return -wfm.Windfarm(wt_pos, wind_dir, R, Uin, Uout, rho, kappa, alpha).power(U)
+    ang = 0.5*np.pi - wind_dir*np.pi/180 
+    vec_dir = np.array([np.cos(ang), np.sin(ang), 0])
+
+    return -wfm.Windfarm(wt_pos, vec_dir, R, Uin, Uout, rho, kappa, alpha).power(U)
 
 
 def calc_total_P_old(x_vector, U, wind_dir, R0_loc, alpha, rho, U_cut_in, U_cut_out, U_stop, C_p):
@@ -309,7 +311,6 @@ def calc_partial(fun, x, fun_param, dl=0.1):
     
 def objective_fun_num(x_vector, U, wind_dir, R0_loc, alpha, rho, U_cut_in, U_cut_out, U_stop, C_p):
     kappa = 0.05
-    wind_dir = np.array([np.cos(wind_dir), np.sin(wind_dir), 0])
     fun_param = wind_dir, R0_loc[0], U_cut_in, U_cut_out, rho, kappa , alpha, U
     return calc_total_P(x_vector, *fun_param), calc_partial(calc_total_P, x_vector, fun_param)
 
@@ -585,10 +586,6 @@ for first_ind in N_c_J:
 
 print("c_J_ind: ", c_J_ind)
 
-
-
-
-
 cons_c = functools.partial(cons_c, c_J_ind=c_J_ind)
 cons_J = functools.partial(cons_J, c_J_ind=c_J_ind)
 
@@ -618,11 +615,8 @@ delta_u_eval_optim = np.zeros((N_turb, N_x, N_y))
 print("-----------")
 print("Initial turbine Production: ")
 print("-----------")
-#objective_fun_num_robust_design(x_vector, pts=cop_evals_physical, wts=wts_2D, R0_loc=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, U_stop=U_stop, C_p=C_p) # OLAV 
+objective_fun_num_robust_design(x_vector, pts=cop_evals_physical, wts=wts_2D, R0_loc=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, U_stop=U_stop, C_p=C_p) # OLAV 
 print("-----------")
-
-
-print("------------")
 
 obj_fun = functools.partial(objective_fun_num_robust_design, pts=cop_evals_physical, wts=wts_2D, R0_loc=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, U_stop=U_stop, C_p=C_p)
 

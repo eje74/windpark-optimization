@@ -28,6 +28,8 @@ class Windfarm:
             Cut in wind speed. Minimum speed for power production
         Uout : float (default = 12.0)
             Cut out speed. Maxiumum power production
+        Ustop : float (default = 15.0)
+            Stop speed. alpha = 0
         rho : float (default = 1.0)
             Air density
         kappa :

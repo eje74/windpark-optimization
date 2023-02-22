@@ -147,7 +147,7 @@ class Turbine:
             return 0.5*self.rho*self.A*self.Cp_max*u**3
         else:
             self.Cp = self.Cp_max*(self.u_out/u)**3
-            self.alpha = Turbine.calc_alpha(self.Cp)
+            self.alpha = self.calc_alpha(self.Cp)
             return self.P_rated
 
 
@@ -329,11 +329,12 @@ if __name__ == "__main__":
     pos[1, :] = yv.flatten()
 
     du_squared = 0
-
     for wt in wt_farm:
         du_squared = du_squared + wt.delta_u(pos)**2
-
     u_field = U*(1 - np.sqrt(du_squared)).reshape(xv.shape)
+
+
+
     plt.figure()
     plt.pcolormesh(xv, yv, u_field < 0)
     plt.colorbar()
