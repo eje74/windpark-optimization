@@ -8,7 +8,7 @@ class Windfarm:
 
     Attributes
     ----------
-    wt_list:
+    wt_list: list-like
         windtubine list
 
     """
@@ -42,7 +42,26 @@ class Windfarm:
         for pos in turbine_positions.transpose():
             self.wt_list.append(wtm.Turbine(*pos, wind_direction, R, Uin, Uout, rho, kappa, Cp_max))
 
+
     def power(self, U):
+        """
+        Calculates the power output for the wind farm. 
+
+        This method will also sort windturbines in the 'wt_list' so that the first element 
+        is farthest upwind the second is next farthest and so on.
+        The method will also set the windturbines induction factor, 'alpha', so the 'power'-method
+        should be run before using the 'wind_field'-method
+
+        Parameters
+        ----------
+        U : float
+            The back ground, ie. far field, wind speed.
+
+        Returns
+        -------
+        float:
+            Wind farm's power output
+        """
         power_tot = 0
         self.wt_list.sort()
         for n, wt in enumerate(self.wt_list):
@@ -50,9 +69,10 @@ class Windfarm:
             power_tot += wt.P(u_mean)
         return power_tot
     
+
     def wind_field(self, U, xv, yv, z = 0):
         """
-        Calculates the wind speed field, assuming that the power function has been called.
+        Calculates the wind speed field, assuming that the 'power'-function has been called.
 
         Parameters
         ----------

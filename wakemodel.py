@@ -75,6 +75,54 @@ class Turbine:
         self.reset(x, y, z, wind_dir, R, Uin, Uout, rho, kappa, Cp_max)
     
     def reset(self, x, y, z, wind_dir, R = 63, Uin = 3, Uout = 12, rho=1.0, kappa=0.05, Cp_max = 16/27):
+        """
+        Sets the given turbine paramters and calculates the dervied quanteties
+
+        Parameters
+        ----------
+        pos : numpy.ndarray
+            Turbine position
+        wind_dir : numpy.ndarray
+            wind direction. (Will be normalized)
+        R : float (default = 63.0)
+            Actuator disk radius
+        u_in : float (default = 3.0)
+            Cut in wind speed. Minimum speed for power production
+        u_out : float (default = 12.0)
+            Cut out speed. Maxiumum power production
+        rho : float (default = 1.0)
+            Air density
+        kappa :
+            Wake expansion rate
+        Cp_max : float (default = 16/27)  
+            Maximum power coefficient. The theoretical limit is 16/27 (Betz-law)  
+        alpha_max : float
+            Maximum induction factor. Found from the equation 4*alpha(1-alpha)**2 = Cp_max
+        alpha : float   
+            Induction factor
+        A : float
+            Rotor disk area
+        Cp : float
+            Power coefficient
+        P_rated : float
+            Maximum power production also called rated power
+        t1 : numpy.ndarray
+            A tangent to the rotor normal. Used, toghether with 't2', to 
+            intergrate the windfield over the actuator disk
+        t2 : numpy.ndarray
+            A tangent to the rotor normal. Used, toghether with 't1', to
+            intergrate the windfield over the actuator disk
+
+        Raises
+        ------
+        ValueError :
+            If Cp_max > 16/27 the it breaks Betz-law, and will not fit with the 
+            the functional form of Cp.
+        """
+
+        if Cp_max > 16/27:
+            raise ValueError(f"Cp_max = {Cp_max} which is larger than the Bets' limit ({16/27}).")
+         
         # Given quanteties
         self.pos = np.array([x, y, z])
         self.wind_dir = wind_dir/np.linalg.norm(wind_dir)
