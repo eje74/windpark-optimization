@@ -347,59 +347,146 @@ def cons_J(x_vector, c_J_ind):
         
     return Jac
     
+def copulaGeneration():
+    theta_data  = np.loadtxt(pathName + 'Dir_100m_2016_2017_2018.txt')
+    u_data  = np.loadtxt(pathName + 'Sp_100m_2016_2017_2018.txt')
+
+    theta_data[theta_data<0] = theta_data[theta_data<0] + 360
+    theta_data[theta_data>360] = theta_data[theta_data>360] - 360
+
+
+    if False:
+
+        u_theta_data = np.array([u_data, theta_data])
+        print("np.shape(u_theta_data): ", np.shape(u_theta_data))
+
+        u = pv.to_pseudo_obs(u_theta_data.T)
+        cop = pv.Vinecop(data=u)
+        print(cop)
+        pv.Vinecop.to_json(cop, "copula_tree_100m_2016_2017_2018.txt")
+
+
+    data_samples_loc = np.array([u_data, theta_data])
+
+    # Instantiate copula object from precomputed model saved to file
+    copula_loc = pv.Vinecop(filename = pathName + 'copula_tree_100m_2016_2017_2018.txt', check=True)
+
+    return copula_loc, data_samples_loc
+
+
+def copulaDataGeneration(copula_loc, data_samples_loc, Nq_sp_loc, Nq_dir_loc, U_cut_in_loc, U_cut_out_loc, U_stop_loc):
+
+  
+
+    print('shape:',data_samples_loc.shape)
+    u_data = data_samples_loc[0,:]
+    #theta_data = data_samples_loc[1,:]
+
+    #u_data = data_samples
+
+    # Instantiate copula object from precomputed model saved to file
+    copula = pv.Vinecop(filename = pathName + 'copula_tree_100m_2016_2017_2018.txt', check=True)
+    #print(copula)
+
+    num_samples = data_samples_loc.shape[1] #Number of model evaluations
+    num_dim = data_samples_loc.shape[0]
+
+    # Independent uniforms
+    u_samples_ind = np.random.uniform(low=0, high=1, size=(num_samples, num_dim))
+
+    # Sample copula via inverse Rosenblatt
+    cop_samp_from_ind = copula_loc.inverse_rosenblatt(u_samples_ind)
+
+
+    # Transform back simulations to the original scale
+    copula_samples_from_unif = np.asarray([np.quantile(data_samples_loc[i,:], cop_samp_from_ind[:, i]) for i in range(0, num_dim)])
+
+
+    # Construct quadrature rule for expectation operators
+    # Divide parameter domain w.r.t. U_cut_in and U_cut_off
+    # Introduce point probability masses, and local GQ
+    
+    #p_0 = np.sum(u_data < U_cut_in)/num_samples
+    #ind_var_s = (u_data < U_cut_out) & (u_data >= U_cut_in)
+    #ind_con_s = u_data >= U_cut_out
+
+    p_0 = np.sum((u_data < U_cut_in_loc) | (u_data >= U_stop_loc))/num_samples
+    ind_var_s = (u_data < U_cut_out_loc) & (u_data >= U_cut_in_loc)
+    ind_con_s = (u_data >= U_cut_out_loc) & (u_data < U_stop_loc)
+
+    p_1 = np.sum(ind_var_s)/num_samples
+    p_2 = np.sum(ind_con_s)/num_samples
+
+    #print("Probabilities: ", p_0, p_1, p_2, np.sum(p_0+p_1+p_2))
+
+    # Set number of quadrature points for the regions 1 ([U_cut_in, U_cut_out]) and 2 ([U_cut_out, infty])
+    # in speed (sp) and direction (dir)
+    
+
+    [pts_sp_1, wts_sp_1] = np.polynomial.legendre.leggauss(Nq_sp_loc[0])
+    [pts_dir_1, wts_dir_1] = np.polynomial.legendre.leggauss(Nq_dir_loc[0])
+
+    [pts_sp_2, wts_sp_2] = np.polynomial.legendre.leggauss(Nq_sp_loc[1])
+    [pts_dir_2, wts_dir_2] = np.polynomial.legendre.leggauss(Nq_dir_loc[1])
+
+    # Rescale to unit interval, and weights summing to 1
+    pts_sp_1 = (pts_sp_1+1)/2.
+    wts_sp_1 = 0.5*wts_sp_1
+    pts_dir_1 = (pts_dir_1+1)/2.
+    wts_dir_1 = 0.5*wts_dir_1
+
+    pts_sp_2 = (pts_sp_2+1)/2.
+    wts_sp_2 = 0.5*wts_sp_2
+    pts_dir_2 = (pts_dir_2+1)/2.
+    wts_dir_2 = 0.5*wts_dir_2
+
+    #print("Quadrature tests 1D: ", sum(wts), sum(pts*wts), sum((pts**2)*wts), sum(pts**3*wts))
+    # Quadrature for U in [U_cut_in, U_cut_out]
+    pts_2D_1 = repeat_product(p_0+p_1*pts_sp_1, pts_dir_1).T
+    wts_2D_1 = np.kron(wts_sp_1, wts_dir_1)
+
+    # Quadrature for U > U_cut_out
+    pts_2D_2 = repeat_product(p_0+p_1+p_2*pts_sp_2, pts_dir_2).T
+    wts_2D_2 = np.kron(wts_sp_2, wts_dir_2)
+
+    # Form compound quadrature rule
+    pts_2D_comp = np.concatenate((np.zeros((2, 1)), pts_2D_1, pts_2D_2), axis=1)
+    wts_2D_comp = np.concatenate(([p_0], p_1*wts_2D_1,p_2*wts_2D_2), axis=0)
+
+    # May want to compare to standard GQ, for now use only compound rule
+    pts_2D = pts_2D_comp
+    wts_2D = wts_2D_comp
 
 
 
+    # Evaluate copula via inverse Rosenblatt
+    cop_evals = copula_loc.inverse_rosenblatt(pts_2D.T)
+
+    # Transform back evaluations to the original scale
+    cop_evals_physical = np.asarray([np.quantile(data_samples_loc[i,:], cop_evals[:, i]) for i in range(0, num_dim)])
+
+    print('windDataGeneration() done')
+
+    return cop_evals_physical, wts_2D
+
+    ######################################################################################################
+
+pathName = '/home/AD.NORCERESEARCH.NO/olau/Documents/projects/DynPosWind/opt_farm/data/'
 #pathName = '/Users/pepe/Documents/MATLAB/wind_Matlab/'
 #pathName = "C:/Users/jhel/" #'Documents/MATLAB/wind_Matlab/'
-#pathName = '/home/AD.NORCERESEARCH.NO/olau/Documents/projects/DynPosWind/opt_farm/data/'
-pathName = "/home/AD.NORCERESEARCH.NO/esje/Programs/GitHub/windpark-optimization/data/"
+#pathName = "/home/AD.NORCERESEARCH.NO/esje/Programs/GitHub/windpark-optimization/data/"
 
 
-theta_data  = np.loadtxt(pathName + 'Dir_100m_2016_2017_2018.txt')
-u_data  = np.loadtxt(pathName + 'Sp_100m_2016_2017_2018.txt')
 
-#theta_data = np.array([0.])
-#u_data = np.array([25.])
-
-theta_data[theta_data<0] = theta_data[theta_data<0] + 360
-theta_data[theta_data>360] = theta_data[theta_data>360] - 360
-
-print("Theta, min and max: ",np.amin(theta_data), np.amax(theta_data))
-
-
-if False:
-
-    u_theta_data = np.array([u_data, theta_data])
-    print("np.shape(u_theta_data): ", np.shape(u_theta_data))
-
-    u = pv.to_pseudo_obs(u_theta_data.T)
-    cop = pv.Vinecop(data=u)
-    print(cop)
-    pv.Vinecop.to_json(cop, "copula_tree_100m_2016_2017_2018.txt")
-
-#pathName = '/Users/pepe/Documents/Wind/Pywake/'
-#pathName = "C:/Users/jhel/" 
-#pathName = '/home/AD.NORCERESEARCH.NO/olau/Documents/projects/DynPosWind/opt_farm/data/'
-    
-data_samples = np.array([u_data, theta_data])
-    
-# Instantiate copula object from precomputed model saved to file
-copula = pv.Vinecop(filename = pathName + 'copula_tree_100m_2016_2017_2018.txt', check=True)
-print(copula)
-
-num_samples = 10000 #Number of model evaluations
-num_samples = 26304
-num_dim = 2
-
-# Some physical/technical parameters must be introduced already here
-# Induction factor alpha, based on the actuator disc model
-alpha = 0.3333333
-# Note that alpha=(U-U_R)/U, so the actual wind speeds upstream and downstream of the disc should be used
+# Set number of quadrature points for the regions 1 ([U_cut_in, U_cut_out]) and 2 ([U_cut_out, infty])
+# in speed (sp) and direction (dir)
+Nq_sp = np.array([5,3])
+Nq_dir = np.array([10,10])    
 
 U_cut_in = 3 #5
 U_cut_out = 10.59 #10 #25 #20
 U_stop = 25.
+
 rho = 1.225#1.225 # [kg/m 3]
 
 # Power coefficient
@@ -413,102 +500,37 @@ now = datetime.datetime.now()
 np.random.seed(0)
 rotorRadius = 120. #50.
 
+# Instantiate copula object from precomputed model saved to file
+
+copula, data_samples = copulaGeneration()
+
+print(copula)
+
+
+
+cop_evals_physical, wts_2D = copulaDataGeneration(copula, data_samples, Nq_sp, Nq_dir, U_cut_in, U_cut_out, U_stop)
+
+Utmp = cop_evals_physical[0,:]
+wind_dir_tmp = cop_evals_physical[1,:]*np.pi/180. + np.pi
+
+#num_samples = 10000 #Number of model evaluations
+#num_samples = 26304
+#num_dim = 2
+
+# Some physical/technical parameters must be introduced already here
+# Induction factor alpha, based on the actuator disc model
+alpha = 0.3333333
+# Note that alpha=(U-U_R)/U, so the actual wind speeds upstream and downstream of the disc should be used
+
+
 wake_model_param = np.array([C_p, rho, U_cut_in, U_cut_out])
-
-
-# Independent uniforms
-u_samples_ind = np.random.uniform(low=0, high=1, size=(num_samples, num_dim))
-
-# Sample copula via inverse Rosenblatt
-cop_samp_from_ind = copula.inverse_rosenblatt(u_samples_ind)
-
-
-# Transform back simulations to the original scale
-copula_samples_from_unif = np.asarray([np.quantile(data_samples[i,:], cop_samp_from_ind[:, i]) for i in range(0, num_dim)])
-
-
-# Construct quadrature rule for expectation operators
-# Divide parameter domain w.r.t. U_cut_in and U_cut_off
-# Introduce point probability masses, and local GQ
-
-
-p_0 = np.sum((u_data < U_cut_in) | (u_data >= U_stop))/num_samples
-ind_var_s = (u_data < U_cut_out) & (u_data >= U_cut_in)
-ind_con_s = (u_data >= U_cut_out) & (u_data < U_stop)
-
-#p_0 = np.sum(u_data < U_cut_in)/num_samples
-#ind_var_s = (u_data < U_cut_out) & (u_data >= U_cut_in)
-#ind_con_s = u_data >= U_cut_out
-
-p_1 = np.sum(ind_var_s)/num_samples
-p_2 = np.sum(ind_con_s)/num_samples
-
-#print("Probabilities: ", p_0, p_1, p_2, np.sum(p_0+p_1+p_2))
-
-# Set number of quadrature points for the regions 1 ([U_cut_in, U_cut_out]) and 2 ([U_cut_out, infty])
-# in speed (sp) and direction (dir)
-Nq_sp = np.array([5,3])
-Nq_dir = np.array([10,10])
-
-[pts_sp_1, wts_sp_1] = np.polynomial.legendre.leggauss(Nq_sp[0])
-[pts_dir_1, wts_dir_1] = np.polynomial.legendre.leggauss(Nq_dir[0])
-
-[pts_sp_2, wts_sp_2] = np.polynomial.legendre.leggauss(Nq_sp[1])
-[pts_dir_2, wts_dir_2] = np.polynomial.legendre.leggauss(Nq_dir[1])
-
-# Rescale to unit interval, and weights summing to 1
-pts_sp_1 = (pts_sp_1+1)/2.
-wts_sp_1 = 0.5*wts_sp_1
-pts_dir_1 = (pts_dir_1+1)/2.
-wts_dir_1 = 0.5*wts_dir_1
-
-pts_sp_2 = (pts_sp_2+1)/2.
-wts_sp_2 = 0.5*wts_sp_2
-pts_dir_2 = (pts_dir_2+1)/2.
-wts_dir_2 = 0.5*wts_dir_2
-
-#print("Quadrature tests 1D: ", sum(wts), sum(pts*wts), sum((pts**2)*wts), sum(pts**3*wts))
-# Quadrature for U in [U_cut_in, U_cut_out]
-pts_2D_1 = repeat_product(p_0+p_1*pts_sp_1, pts_dir_1).T
-wts_2D_1 = np.kron(wts_sp_1, wts_dir_1)
-
-# Quadrature for U > U_cut_out
-pts_2D_2 = repeat_product(p_0+p_1+p_2*pts_sp_2, pts_dir_2).T
-wts_2D_2 = np.kron(wts_sp_2, wts_dir_2)
-
-# Form compound quadrature rule
-pts_2D_comp = np.concatenate((np.zeros((2, 1)), pts_2D_1, pts_2D_2), axis=1)
-wts_2D_comp = np.concatenate(([p_0], p_1*wts_2D_1,p_2*wts_2D_2), axis=0)
-
-# May want to compare to standard GQ, for now use only compound rule
-pts_2D = pts_2D_comp
-wts_2D = wts_2D_comp
-
-
-
-# Evaluate copula via inverse Rosenblatt
-cop_evals = copula.inverse_rosenblatt(pts_2D.T)
-
-# Transform back evaluations to the original scale
-cop_evals_physical = np.asarray([np.quantile(data_samples[i,:], cop_evals[:, i]) for i in range(0, num_dim)])
-
-print("Size cop_evals_physical: ", np.shape(cop_evals_physical))
-
-print("cop_evals_physical: ", cop_evals_physical)
-
-
-print("GQ copula: ", np.sum(np.prod(cop_evals_physical, axis=0)*wts_2D))
-
-print("MC copula: ", np.mean(np.prod(copula_samples_from_unif, axis=0)))
-
-print("MC data: ", np.mean(np.prod(data_samples, axis=0)))
-
 
 
 
 print("-------------------------------------------------------")
 print('start time: ', now)
 print("-------------------------------------------------------")
+
 
 # JAN 2023, try opt under unc.
 
@@ -518,7 +540,7 @@ print("-------------------------------------------------------")
 #x_all = np.array([[0.,0.]])
 #x_all = np.array([[0, 0],[240, 240]])
 
-#x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100]])
+x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100]])
 #x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100],[0,200],[0,-200],[200,0],[-200,0]])
 #x_all = np.array([[0,0],[20,20],[20,-20],[-20,20],[-20,-20],[0,40],[0,-40],[40,0],[-40,0],[40,40],[40,-40],[-40,40],[-40,-40]])
 #x_all = np.array([[0,0],[20,20],[20,-20],[-20,20],[-20,-20],[0,40],[0,-40],[40,0],[-40,0],[40,40],[40,-40],[-40,40],[-40,-40], [60,20],[60,-20],[-60,20],[-60,-20]])
