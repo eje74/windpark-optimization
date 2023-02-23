@@ -36,14 +36,16 @@ class Turbine:
         Air density
     kappa :
         Wake expansion rate
-    alpha : float (default = 1/3)  
+    Cp_max : float (default = 16/27)  
+        Maximum power coefficient. The theoretical limit is 16/27 (Betz-law)  
+    alpha_max : float
+        Maximum induction factor. Found from the equation 4*alpha(1-alpha)**2 = Cp_max
+    alpha : float   
         Induction factor
     A : float
         Rotor disk area
     Cp : float
         Power coefficient
-    Cp_max : float  
-        Maximum power coefficient (Cp_max = 16/27), given by Betz' law  
     P_rated : float
         Maximum power production also called rated power
     t1 : numpy.ndarray
@@ -69,10 +71,10 @@ class Turbine:
     quadrature_weights = wtq.quadrature_weights
 
 
-    def __init__(self, x, y, z, wind_dir, R = 63, Uin = 3, Uout = 12, rho=1.0, kappa=0.05, alpha = 1/3) -> None:
-        self.reset(x, y, z, wind_dir, R, Uin, Uout, rho, kappa, alpha)
+    def __init__(self, x, y, z, wind_dir, R = 63, Uin = 3, Uout = 12, rho=1.0, kappa=0.05, Cp_max = 16/27) -> None:
+        self.reset(x, y, z, wind_dir, R, Uin, Uout, rho, kappa, Cp_max)
     
-    def reset(self, x, y, z, wind_dir, R = 63, Uin = 3, Uout = 12, rho=1.0, kappa=0.05, alpha = 1/3):
+    def reset(self, x, y, z, wind_dir, R = 63, Uin = 3, Uout = 12, rho=1.0, kappa=0.05, Cp_max = 16/27):
         # Given quanteties
         self.pos = np.array([x, y, z])
         self.wind_dir = wind_dir/np.linalg.norm(wind_dir)
@@ -81,12 +83,13 @@ class Turbine:
         self.u_out = Uout
         self.rho = rho
         self.kappa = kappa
-        self.alpha = alpha
+        self.Cp_max = Cp_max 
 
         # Derived quanteties
+        self.alpha_max = self.calc_alpha(Cp_max)
+        self.alpha = self.alpha_max
         self.A = np.pi*self.R**2
         self.Cp = 4*self.alpha*(1-self.alpha)**2
-        self.Cp_max = 16/27 
         self.P_rated = 0.5*self.rho*self.A*self.Cp_max*self.u_out**3
         t1, t2 = find_orthogonal_vectors(self.wind_dir)
         self.t1, self.t2 = t1, t2
@@ -143,7 +146,7 @@ class Turbine:
             self.alpha = 0
             return 0
         elif u <= self.u_out:
-            self.alpha = 1/3
+            self.alpha = self.alpha_max
             return 0.5*self.rho*self.A*self.Cp_max*u**3
         else:
             self.Cp = self.Cp_max*(self.u_out/u)**3
@@ -301,22 +304,27 @@ if __name__ == "__main__":
     wt_farm = []
     z = 0.0
     for x, y in zip(list_pos_x, list_pos_y):
-        wt_farm.append(Turbine(x, y, z, wind_dir))
+        wt_farm.append(Turbine(x, y, z, wind_dir, Cp_max=0.4))
 
     # Calculate farm power
     P_tot = 0
     wt_farm.sort()
+    alpha_list = []
     for n, wt in enumerate(wt_farm):
         u_mean = wt.mean_u(wt_farm[:n], U)
         if u_mean < 0:
             print("ERROR u_mean = ", u_mean)
         P_wt = wt.P(u_mean)
+        alpha_list.append(wt.alpha)
         P_tot += P_wt
-
 
     print("Rated power = ", wt_farm[0].P_rated*1e-6)
     print("Total power = ", P_tot*1e-6)
 
+
+    plt.figure()
+    alpha_list.sort()
+    plt.plot(alpha_list, '.')
 
     # Print velocity field
     x = 10*np.linspace(-400, 400, 801)

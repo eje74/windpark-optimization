@@ -72,7 +72,7 @@ def objective_fun_num_robust_design(x_vector, pts, wts, R0_loc, alpha, rho, U_cu
     for q in range(Nq):
         U = pts[0,q]
         wind_dir = pts[1,q]
-        fun_param = wind_dir, R0_loc[0], U_cut_in, U_cut_out, rho, kappa , alpha, U
+        fun_param = wind_dir, R0_loc[0], U_cut_in, U_cut_out, rho, kappa , C_p, U
         P_evals[q] = calc_total_P(x_vector, *fun_param)
         #temp = calc_partial(calc_total_P, x_vector, fun_param)
         dPdx_evals[q,:] =  calc_partial(calc_total_P, x_vector, fun_param)
@@ -246,7 +246,7 @@ def averaged_wind_speed(x_i, x_all, U, wind_dir, D_loc, R0_loc):
     return u_averaged, delta_u_averaged
 
 
-def calc_total_P(x_vector, wind_dir, R, Uin, Uout, rho, kappa , alpha, U):
+def calc_total_P(x_vector, wind_dir, R, Uin, Uout, rho, kappa , C_p, U):
     N_turb = len(x_vector)//2
     wt_pos = np.zeros((3, N_turb))
     wt_pos[0, :] = x_vector[::2]
@@ -255,7 +255,7 @@ def calc_total_P(x_vector, wind_dir, R, Uin, Uout, rho, kappa , alpha, U):
     ang = 0.5*np.pi - wind_dir*np.pi/180 
     vec_dir = np.array([np.cos(ang), np.sin(ang), 0])
 
-    return -wfm.Windfarm(wt_pos, vec_dir, R, Uin, Uout, rho, kappa, alpha).power(U)
+    return -wfm.Windfarm(wt_pos, vec_dir, R, Uin, Uout, rho, kappa, C_p).power(U)
 
 
 def calc_total_P_old(x_vector, U, wind_dir, R0_loc, alpha, rho, U_cut_in, U_cut_out, U_stop, C_p):
@@ -516,7 +516,7 @@ print("-------------------------------------------------------")
 # Coordinates of all wind turbines
 
 #x_all = np.array([[0.,0.]])
-x_all = np.array([[0, 0],[240, 240]])
+#x_all = np.array([[0, 0],[240, 240]])
 
 #x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100]])
 #x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100],[0,200],[0,-200],[200,0],[-200,0]])
@@ -524,6 +524,8 @@ x_all = np.array([[0, 0],[240, 240]])
 #x_all = np.array([[0,0],[20,20],[20,-20],[-20,20],[-20,-20],[0,40],[0,-40],[40,0],[-40,0],[40,40],[40,-40],[-40,40],[-40,-40], [60,20],[60,-20],[-60,20],[-60,-20]])
 
 #x_all = np.array([[-4500, 3000], [-2250, 3000], [0,3000], [2250, 3000], [4500,3000],[-4500, 1000], [-2250, 1000], [0,1000], [2250, 1000], [4500,1000], [-4500, -1000], [-2250, -1000], [0, -1000], [2250, -1000], [4500, -1000], [-4500, -3000], [-2250, -3000], [0,-3000], [2250, -3000], [4500,-3000]])
+x_all = np.array([[-4500, 3000], [-2250, 3000], [0,3000], [2250, 3000], [4500,3000],[-4500, 1000], [-2250, 1000], [0,1000], [2250, 1000], [4500,1000]])
+
 #x_all = np.array([[-2000, 2500],[-1000,2500],[0,2500],[1000, 2500],[2000, 2500]])
 print("x_all.shape", x_all.shape)
 
