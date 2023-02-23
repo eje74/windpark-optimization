@@ -320,8 +320,8 @@ def cons_J(x_vector, c_J_ind):
 
 #pathName = '/Users/pepe/Documents/MATLAB/wind_Matlab/'
 #pathName = "C:/Users/jhel/" #'Documents/MATLAB/wind_Matlab/'
-pathName = '/home/AD.NORCERESEARCH.NO/olau/Documents/projects/DynPosWind/opt_farm/data/'
-
+#pathName = '/home/AD.NORCERESEARCH.NO/olau/Documents/projects/DynPosWind/opt_farm/data/'
+pathName = "/home/AD.NORCERESEARCH.NO/esje/Programs/GitHub/windpark-optimization/data/"
 
 
 theta_data  = np.loadtxt(pathName + 'Dir_100m_2016_2017_2018.txt')
@@ -484,7 +484,7 @@ print("-------------------------------------------------------")
 # Coordinates of all wind turbines
 
 #x_all = np.array([[0.,0.]])
-x_all = np.array([[0,0],[240,240]])
+#x_all = np.array([[0,0],[240,240]])
 
 #x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100]])
 #x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100],[0,200],[0,-200],[200,0],[-200,0]])
@@ -492,7 +492,7 @@ x_all = np.array([[0,0],[240,240]])
 #x_all = np.array([[0,0],[20,20],[20,-20],[-20,20],[-20,-20],[0,40],[0,-40],[40,0],[-40,0],[40,40],[40,-40],[-40,40],[-40,-40], [60,20],[60,-20],[-60,20],[-60,-20]])
 
 #x_all = np.array([[-4500, 3000], [-2250, 3000], [0,3000], [2250, 3000], [4500,3000],[-4500, 1000], [-2250, 1000], [0,1000], [2250, 1000], [4500,1000], [-4500, -1000], [-2250, -1000], [0, -1000], [2250, -1000], [4500, -1000], [-4500, -3000], [-2250, -3000], [0,-3000], [2250, -3000], [4500,-3000]])
-#x_all = np.array([[-2000, 2500],[-1000,2500],[0,2500],[1000, 2500],[2000, 2500]])
+x_all = np.array([[-2000, 2500],[-1000,2500],[0,2500],[1000, 2500],[2000, 2500]])
 print("x_all.shape", x_all.shape)
 
 print("x_all", x_all)

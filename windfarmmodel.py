@@ -13,7 +13,7 @@ class Windfarm:
 
     """
     
-    def __init__(self, turbine_positions, wind_direction, R = 63, Uin = 3, Uout = 12, rho=1.0, kappa=0.05, alpha = 1/3):
+    def __init__(self, turbine_positions, wind_direction, R = 63, Uin = 3, Uout = 12, rho=1.0, kappa=0.05, Cp_max = 16/27):
         """
         Parameters
         ----------
@@ -34,13 +34,13 @@ class Windfarm:
             Air density
         kappa :
             Wake expansion rate
-        alpha : float (default = 1/3)  
+        Cp_max : float (default = 16/27)  
             Induction factor
         """
         self.wind_direction = wind_direction/np.linalg.norm(wind_direction)
         self.wt_list = []
         for pos in turbine_positions.transpose():
-            self.wt_list.append(wtm.Turbine(*pos, wind_direction, R, Uin, Uout, rho, kappa, alpha))
+            self.wt_list.append(wtm.Turbine(*pos, wind_direction, R, Uin, Uout, rho, kappa, Cp_max))
 
     def power(self, U):
         power_tot = 0
@@ -83,7 +83,7 @@ class Windfarm:
 if __name__ == "__main__":
     print("Test wind farm model")
     # Make wind farm
-    N = 20 # Number of turbines
+    N = 200 # Number of turbines
     wind_direction = np.array([1, -1, 0])
     turbine_pos = np.zeros((3, N))
     from random import uniform
@@ -91,16 +91,23 @@ if __name__ == "__main__":
         turbine_pos[0, n] = 10*uniform(-400, 400) # x - pos
         turbine_pos[1, n] = 10*uniform(-4*180, 4*20) # y - pos
 
-    U = 15 # Windspeed
+    U = 13 # Windspeed
     wf = Windfarm(turbine_pos, wind_direction)
 
     # time the power calculation
     import time
     t0 = time.time_ns()
-    wf = Windfarm(turbine_pos, wind_direction)
+    wf = Windfarm(turbine_pos, wind_direction, Cp_max=0.48)
     P_tot = wf.power(U)
     print("time = ", (time.time_ns()-t0)*1e-9, " sec")   
 
+    alpha_list = []
+    for wt in wf.wt_list:
+        alpha_list.append(wt.alpha)
+
+    plt.figure()
+    alpha_list.sort()
+    plt.plot(alpha_list, '.')
 
     # Print velocity field
     x = 10*np.linspace(-400, 400, 401)
