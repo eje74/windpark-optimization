@@ -23,6 +23,92 @@ def repeat_product(x, y):
                             np.tile(y, len(x))])   
 
 
+###################################################################
+
+def objective_fun_num_robust_design(x_vector, pts, wts, R0_loc, rho, U_cut_in, U_cut_out, U_stop, C_p):
+    kappa = 0.05
+    sigma_weight = 0.1
+    Nq = len(wts)
+    N_turb = int(len(x_vector)/2.)
+    dPdx_evals = np.zeros((Nq,2*N_turb))
+    #P_evals = np.zeros((Nq,1))
+    P_evals = np.zeros(Nq)
+
+    for q in range(Nq):
+        U = pts[0,q]
+        wind_dir = pts[1,q]
+        fun_param = wind_dir, R0_loc[0], U_cut_in, U_cut_out, rho, kappa , C_p, U
+        P_evals[q] = calc_total_P(x_vector, *fun_param)
+        #temp = calc_partial(calc_total_P, x_vector, fun_param)
+        dPdx_evals[q,:] =  calc_partial(calc_total_P, x_vector, fun_param)
+
+
+        #print("dPdx_evals[q,:]: ", dPdx_evals[q,:])
+    mu = np.sum(P_evals*wts)
+    wts = wts.reshape(1, -1)
+    grad_mu = wts.dot(dPdx_evals)
+    #print("grad_mu: ", grad_mu)
+    sigma = np.sqrt(np.sum(P_evals**2*wts)-mu**2)
+
+    power_moments = np.array([mu, sigma])
+    
+    if sigma == 0:
+
+        print("Turbine positions: ", x_vector)    
+        print("mu: ", mu, ", sigma: ", sigma, ", (mu+sigma_weight*sigma): ", (mu+sigma_weight*sigma))
+        return mu, grad_mu, power_moments
+
+    else:
+        grad_sigma_sq = wts.dot(2*np.tile(np.c_[P_evals],(1,2*N_turb))*dPdx_evals) - 2*mu*grad_mu
+        grad_sigma = grad_sigma_sq/(2.*sigma)
+    
+        #print("grad_sigma: ", grad_sigma )
+        print("Turbine positions: ", x_vector)    
+        print("mu: ", mu, ", sigma: ", sigma, ", (mu+sigma_weight*sigma): ", (mu+sigma_weight*sigma))
+        #return mu, grad_mu #(mu-sigma)
+        return mu+sigma_weight*sigma, grad_mu+sigma_weight*grad_sigma , power_moments
+    
+
+def calc_total_P(x_vector, wind_dir, R, Uin, Uout, rho, kappa , C_p, U):
+    N_turb = len(x_vector)//2
+    wt_pos = np.zeros((3, N_turb))
+    wt_pos[0, :] = x_vector[::2]
+    wt_pos[1, :] = x_vector[1::2]
+
+    ang = 0.5*np.pi - wind_dir
+    vec_dir = np.array([np.cos(ang), np.sin(ang), 0])
+
+    return -wfm.Windfarm(wt_pos, vec_dir, R, Uin, Uout, rho, kappa, C_p).power(U)
+
+
+
+def calc_partial(fun, x, fun_param, dl=0.1):
+    """
+    Calculates the partial derivatives of the function 'fun' at point 'x', of the variables 'x'
+    Args:
+        fun       : is a function taking the arguments (x, *fun_param)
+        x         : the point where the partial derivative is evaluated. (assumin a 1-D ndarray)
+        fun_param : the rest of 'fun''s arguments. (assumin a tuple)
+        dl        : the size of variation used to calculate the partial derivativs. (default = 0.1)
+    Output:
+        dP : list of partial derivative, with the same ordering as the 'x' array. (1-D ndarray)
+    """
+    dP = np.zeros(len(x))
+    dx = np.zeros(x.shape)
+    dl_inv = 0.5/dl
+    for i in np.arange(len(x)):
+        dx[i] = dl
+        dP[i] = (fun(x+dx, *fun_param) - fun(x-dx, *fun_param))*dl_inv
+        dx[i] = 0
+
+    #NBNBNBNBNBNBNBNBNB bare for testing
+    dP= dP+2e-1*(np.random.random_sample(dP.shape) - 0.5)   
+    #NBNBNBNBNBNBNBNBNB slutt
+    return dP
+    
+
+###################################################################
+
 def copulaGeneration():
     theta_data  = np.loadtxt(pathName + 'Dir_100m_2016_2017_2018.txt')
     u_data  = np.loadtxt(pathName + 'Sp_100m_2016_2017_2018.txt')
@@ -272,9 +358,12 @@ def copulaDataGeneration(copula_loc, data_samples_loc, Nq_sp_loc, Nq_dir_loc, U_
     # Transform back evaluations to the original scale
     cop_evals_physical = np.asarray([np.quantile(data_samples_loc[i,:], cop_evals[:, i]) for i in range(0, num_dim)])
 
+    cop_evals_physical[1,:]*=np.pi/180.
+
     print('windDataGeneration() done')
 
     return cop_evals_physical, wts_2D
+    
 
     ######################################################################################################
 
@@ -291,12 +380,12 @@ plt.rcParams['text.usetex'] = True
 
 #NBNBNBNBNBNBNB
 
-#alpha = 1/3.
+#alpha = 0.
 
 #NBNBNBNBNBNBNB
 
 #
-N_turb = 12
+N_turb = 2
 
 Nq_sp = np.array([5,3])
 Nq_dir = np.array([10,10])
@@ -367,8 +456,9 @@ y_grid = np.linspace(-50*R0[0], 50*R0[0], N_y)
 cop_evals_physical, wts_2D = copulaDataGeneration(copula, data_samples, Nq_sp, Nq_dir, U_cut_in, U_cut_out, U_stop)
 
 Utmp = cop_evals_physical[0,:]
-wind_dir_tmp = cop_evals_physical[1,:]*np.pi/180. + np.pi
+wind_dir_tmp = cop_evals_physical[1,:]
 
+print("wind Directions in radians:", wind_dir_tmp)
 
 
 U = np.mean(Utmp)
@@ -444,6 +534,11 @@ for q in range(len(wts_2D)):
 print("------------------------------------")
 print("Plotting Total Power:", mu)
 print("------------------------------------")
+
+
+tmp, tmp2, power_mom = objective_fun_num_robust_design(end_pos, pts=cop_evals_physical, wts=wts_2D, R0_loc=R0, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, U_stop=U_stop, C_p=C_p)
+
+print("Plotting obj Power:", power_mom[0])
 
 U, wind_dir, wts_2D_plot  = windDataGenerationPlot(copula, data_samples, Nq_sp_plot, Nq_dir_plot)
 

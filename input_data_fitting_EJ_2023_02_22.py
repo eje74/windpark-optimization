@@ -144,7 +144,8 @@ def calc_partial(fun, x, fun_param, dl=0.1):
     
 def objective_fun_num(x_vector, U, wind_dir, R0_loc, alpha, rho, U_cut_in, U_cut_out, U_stop, C_p):
     kappa = 0.05
-    fun_param = wind_dir, R0_loc[0], U_cut_in, U_cut_out, rho, kappa , alpha, U
+    #fun_param = wind_dir, R0_loc[0], U_cut_in, U_cut_out, rho, kappa , alpha, U
+    fun_param = wind_dir, R0_loc[0], U_cut_in, U_cut_out, rho, kappa , C_p, U
     return calc_total_P(x_vector, *fun_param), calc_partial(calc_total_P, x_vector, fun_param)
 
 def cons_c(x_vector, c_J_ind):
@@ -298,6 +299,8 @@ def copulaDataGeneration(copula_loc, data_samples_loc, Nq_sp_loc, Nq_dir_loc, U_
     # Transform back evaluations to the original scale
     cop_evals_physical = np.asarray([np.quantile(data_samples_loc[i,:], cop_evals[:, i]) for i in range(0, num_dim)])
 
+    cop_evals_physical[1,:]*=np.pi/180.
+
     print('windDataGeneration() done')
 
     return cop_evals_physical, wts_2D
@@ -344,7 +347,7 @@ print(copula)
 cop_evals_physical, wts_2D = copulaDataGeneration(copula, data_samples, Nq_sp, Nq_dir, U_cut_in, U_cut_out, U_stop)
 
 Utmp = cop_evals_physical[0,:]
-wind_dir_tmp = cop_evals_physical[1,:]*np.pi/180. + np.pi
+wind_dir_tmp = cop_evals_physical[1,:] #*np.pi/180. + np.pi
 
 #num_samples = 10000 #Number of model evaluations
 #num_samples = 26304
@@ -352,7 +355,7 @@ wind_dir_tmp = cop_evals_physical[1,:]*np.pi/180. + np.pi
 
 # Some physical/technical parameters must be introduced already here
 # Induction factor alpha, based on the actuator disc model
-alpha = 0.3333333
+alpha = 0 #0.3333333
 # Note that alpha=(U-U_R)/U, so the actual wind speeds upstream and downstream of the disc should be used
 
 
@@ -371,14 +374,14 @@ print("-------------------------------------------------------")
 # Coordinates of all wind turbines
 
 #x_all = np.array([[0.,0.]])
-#x_all = np.array([[0, 0],[240, 240]])
+x_all = np.array([[0, 0],[240, 240]])
 
 #x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100]])
 #x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100],[0,200],[0,-200],[200,0],[-200,0]])
 #x_all = np.array([[0,0],[20,20],[20,-20],[-20,20],[-20,-20],[0,40],[0,-40],[40,0],[-40,0],[40,40],[40,-40],[-40,40],[-40,-40]])
 #x_all = np.array([[0,0],[20,20],[20,-20],[-20,20],[-20,-20],[0,40],[0,-40],[40,0],[-40,0],[40,40],[40,-40],[-40,40],[-40,-40], [60,20],[60,-20],[-60,20],[-60,-20]])
 
-x_all = np.array([[-3e3, -1e3], [-1e3, -1e3], [1e3,-1e3], [3e3, -1e3], [-3e3, 5e2], [-1e3, 5e2], [1e3, 5e2], [3e3, 5e2], [-3e3, 2e3], [-1e3, 2e3], [1e3,2e3], [3e3, 2e3]])
+#x_all = np.array([[-3e3, -1e3], [-1e3, -1e3], [1e3,-1e3], [3e3, -1e3], [-3e3, 5e2], [-1e3, 5e2], [1e3, 5e2], [3e3, 5e2], [-3e3, 2e3], [-1e3, 2e3], [1e3,2e3], [3e3, 2e3]])
 
 #x_all = np.array([[-4500, 3000], [-2250, 3000], [0,3000], [2250, 3000], [4500,3000],[-4500, 1000], [-2250, 1000], [0,1000], [2250, 1000], [4500,1000], [-4500, -1000], [-2250, -1000], [0, -1000], [2250, -1000], [4500, -1000], [-4500, -3000], [-2250, -3000], [0,-3000], [2250, -3000], [4500,-3000]])
 #x_all = np.array([[-4500, 2500], [-2250, 2500], [0,2500], [2250, 2500], [4500,2500],[-4500, 1000], [-2250, 1000], [0,1000], [2250, 1000], [4500,1000]])
@@ -465,7 +468,7 @@ x_grid = np.linspace(-50*R0[0], 50*R0[0], N_x)
 y_grid = np.linspace(-50*R0[0], 50*R0[0], N_y)
 
 U = np.mean(cop_evals_physical[0,:])
-wind_dir = np.mean(cop_evals_physical[1,:])*np.pi/180. + np.pi
+wind_dir = np.mean(cop_evals_physical[1,:])  #*np.pi/180. + np.pi
 
 
 u_eval = np.zeros((N_x, N_y))
