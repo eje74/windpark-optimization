@@ -22,25 +22,37 @@ class Windfarm:
             where N is the number of turbines 
         wind_direction : numpy.ndarray
             Wind direction. (Will be normalized)
-        R : float (default = 63.0)
-            Actuator disk radius
-        Uin : float (default = 3.0)
-            Cut in wind speed. Minimum speed for power production
-        Uout : float (default = 12.0)
-            Cut out speed. Maxiumum power production
-        Ustop : float (default = 15.0)
-            Stop speed. alpha = 0
+        R : list-like or float (default = 63.0)
+            Actuator disk radius. If R is a list, the number of elements must be >= N.
+        Uin : list-like or float (default = 3.0)
+            Cut in wind speed. Minimum speed for power production. If Uin is a list, the 
+            number of elements must be >= N.
+        Uout : list-like or float (default = 12.0)
+            Cut out speed. Maxiumum power production. If Uout is a list, the number of 
+            elements must be >= N.
         rho : float (default = 1.0)
             Air density
-        kappa :
-            Wake expansion rate
-        Cp_max : float (default = 16/27)  
-            Induction factor
+        kappa : list-like or float (default = 0.05)
+            Wake expansion rate.  If kapps is a list, the number of elements must be >= N.
+        Cp_max : list-like or float (default = 16/27)  
+            Maximum induction factor.  If C_p is a list, the number of elements must be >= N.
         """
+        num_turb = turbine_pos.shape[1]
+        if np.isscalar(R):
+            R = R*np.ones(num_turb)
+        if np.isscalar(Uin):
+            Uin = Uin*np.ones(num_turb)
+        if np.isscalar(Uout):
+            Uout = Uout*np.ones(num_turb)
+        if np.isscalar(kappa):
+            kappa=kappa*np.ones(num_turb)
+        if np.isscalar(Cp_max):
+            Cp_max = Cp_max*np.ones(num_turb)
+
         self.wind_direction = wind_direction/np.linalg.norm(wind_direction)
         self.wt_list = []
-        for pos in turbine_positions.transpose():
-            self.wt_list.append(wtm.Turbine(*pos, wind_direction, R, Uin, Uout, rho, kappa, Cp_max))
+        for n, pos in enumerate(turbine_positions.transpose()):
+            self.wt_list.append(wtm.Turbine(*pos, wind_direction, R[n], Uin[n], Uout[n], rho, kappa[n], Cp_max[n]))
 
 
     def power(self, U):
@@ -112,12 +124,13 @@ if __name__ == "__main__":
         turbine_pos[1, n] = 10*uniform(-4*180, 4*20) # y - pos
 
     U = 13 # Windspeed
-    wf = Windfarm(turbine_pos, wind_direction)
+    R = [100]*100 + [200]*100
+    wf = Windfarm(turbine_pos, wind_direction, R)
 
     # time the power calculation
     import time
     t0 = time.time_ns()
-    wf = Windfarm(turbine_pos, wind_direction, Cp_max=0.48)
+    wf = Windfarm(turbine_pos, wind_direction, R, Cp_max=0.48)
     P_tot = wf.power(U)
     print("time = ", (time.time_ns()-t0)*1e-9, " sec")   
 
