@@ -85,12 +85,13 @@ def objective_fun_num_robust_design(x_vector, pts, wts, R0_loc, alpha, rho, U_cu
     #print("grad_mu: ", grad_mu)
     sigma = np.sqrt(np.sum(P_evals**2*wts)-mu**2)
 
+    power_moments = np.array([mu, sigma])
     
     if sigma == 0:
 
         print("Turbine positions: ", x_vector)    
         print("mu: ", mu, ", sigma: ", sigma, ", (mu+sigma_weight*sigma): ", (mu+sigma_weight*sigma))
-        return mu, grad_mu
+        return mu, grad_mu, power_moments
 
     else:
         grad_sigma_sq = wts.dot(2*np.tile(np.c_[P_evals],(1,2*N_turb))*dPdx_evals) - 2*mu*grad_mu
@@ -100,150 +101,8 @@ def objective_fun_num_robust_design(x_vector, pts, wts, R0_loc, alpha, rho, U_cu
         print("Turbine positions: ", x_vector)    
         print("mu: ", mu, ", sigma: ", sigma, ", (mu+sigma_weight*sigma): ", (mu+sigma_weight*sigma))
         #return mu, grad_mu #(mu-sigma)
-        return mu+sigma_weight*sigma, grad_mu+sigma_weight*grad_sigma
+        return mu+sigma_weight*sigma, grad_mu+sigma_weight*grad_sigma , power_moments
     
-    
-def power_ind_turbine(U_loc, U_cut_in_loc, U_cut_out_loc, U_stop_loc, C_p_loc, rho_loc, R0_loc):
-    """
-    Compute power output of individual turbine
-    Args:
-        U: ambient/effective wind speed, scalar value
-        U_cut_in: min speed for power production
-        U_cut_out: max effective speed, if larger the yaw is assumed modified to obtain U=U_cut_out
-        C_p: power coefficient (constant)
-        rho: density of air
-        R0: rotor radius
-    Output:
-        Power: the power of the individual turbine [what unit? what time horizon, annually?]
-    """
-    A = np.pi*R0_loc**2
-    if U_loc < U_cut_in_loc or U_loc>U_stop_loc:
-        Power = 0
-    elif U_loc > U_cut_out_loc:
-        Power = 0.5*rho_loc*A*C_p_loc*U_cut_out_loc**3
-    else:
-        Power = 0.5*rho_loc*A*C_p_loc*U_loc**3
-    """
-    print("U =", U)
-    print("R0_loc =", R0_loc)
-    print("rho =", rho)
-    print("C_p =", C_p)
-    print("U_cut_out =", U_cut_out)
-    print("Power P=", Power)    
-    """
-    return Power
-    
-def wind_speed_due_to_wake(x_i, x_all, U, wind_dir, D, r_i, theta_i):
-    """
-    Compute wind speed at downstream turbine i due to the wake of all upstream turbines
-    Args:
-        x_i: target location (does not need to be a windturbine location)
-        x_all: location coordinates of all turbines
-        U: freestream wind speed
-        wind_dir: wind direction
-        D: diameters (of upstream) turbines
-    Output:
-        u_i: wind speed at turbine i caused by all other turbines
-        delta_u_i: wind deficit factors, turbine by turbine
-    """
-
-    N_theta = len(np.atleast_1d(theta_i))
-    N_r = len(np.atleast_1d(r_i))
-    num_turbines, temp = np.shape(x_all)
-    delta_u_i = np.zeros((num_turbines, N_theta, N_r))
-
-    #print("wind_dir: ", wind_dir, "Target turbine coord: ", x_i)
-    
-    for j in range(num_turbines):
-        x_j = x_all[j,:]
-        #theta_ij = np.arctan((x_i[0]-x_j[0])/(x_i[1]-x_j[1]))
-        theta_ij = np.arctan2((x_i[0]-x_j[0]),(x_i[1]-x_j[1]))
-    
-        Eucl_dist = np.sqrt((x_i[0]-x_j[0])**2 + (x_i[1]-x_j[1])**2)
-        downstream_dist_ij = Eucl_dist*np.cos(abs(theta_ij - wind_dir))
-        radial_dist_ij =  Eucl_dist*np.sin(abs(theta_ij - wind_dir))
- 
-        r = np.sqrt((radial_dist_ij - np.outer(np.cos(theta_i), r_i) )**2 + (np.outer(np.sin(theta_i), r_i))**2)
-        
-        #print("Turbine ", j, "d_ij: ", downstream_dist_ij, "r_ij: ", radial_dist_ij, "theta_ij: ", theta_ij)
-        
-        delta_u_i[j,:,:], _, _ = wake_model_continuous(downstream_dist_ij, r, alpha, D[j])
-        if downstream_dist_ij  <= 0:
-            delta_u_i[j] = 0
-        
-    delta_u = np.sqrt(np.sum(delta_u_i**2, axis=0))
-
-    
-    u_i = U*(1-delta_u)
-    
-    #if downstream_dist_ij  >= 0:
-    #    u_ij = U*(1-delta_u)
-    #else:
-    #    u_ij = U
-    
-
-    return u_i, delta_u_i
-        
-    
-def wake_model_continuous(d, r, alpha, D_loc, averaged=False):
-    #
-    # Linear wake expansion
-    kappa = 0.05
-    R0_loc = 0.5*D_loc
-    R_loc = R0_loc + kappa*d
-    #deficit factor Eq. (9)
-    delta_u = 2*alpha*(R0_loc/R_loc)**2*np.exp(-(r/R_loc)**2)
-    
-    #Partial_delta_u_Partial_d = -4*alpha*R0**2*kappa*np.exp(-r**2/R**2)*(R**(-3)+r/R)
-    Partial_delta_u_Partial_d = 4*alpha*R0_loc**2*kappa/R_loc**3*np.exp(-r**2/R_loc**2)*(r**2/R_loc**2-1)
-
-    Partial_delta_u_Partial_r = -2*r/R_loc**2*delta_u
-        
-    return delta_u, Partial_delta_u_Partial_d, Partial_delta_u_Partial_r
-    
-
-def averaged_wind_speed(x_i, x_all, U, wind_dir, D_loc, R0_loc):
-    """
-    Average the wind speed described by u_fun over the disc with radius R0 (actuator disc model?) using numerical integration in polar coordinates
-    Args:
-        x_i: coordinates of target wind turbine
-        x_all: coordinates of all wind turbines
-        U: ambient wind speed
-        wind_dir: wind direction
-        D: diameters of (all) wake-inducing wind turbines
-        R0: radius of target turbine i;
-        
-    Output:
-        u_averaged: average wind speed (scalar)
-        delta_averaged: averaged wind speed reduction from all turbines (vector)
-    """
-    # Discretization of radius and angle for wind speed numerical integration over the rotor swept area (assumed circular)
-    theta_min, theta_max, n_points_theta = (0, 2*np.pi, 30)
-    r_min, r_max, n_points_r = (1e-6, R0_loc, 20)
-    theta_i = np.linspace(theta_min, theta_max, n_points_theta)
-    r_i = np.linspace(r_min, r_max, n_points_r)
-
-    #print("r_i =", r_i)
-
-    # Get wake-reduced wind speed point-wise
-    u_evals, delta_u_evals = wind_speed_due_to_wake(x_i, x_all, U, wind_dir, D_loc, r_i, theta_i)
-    integrand_pts_u = u_evals*np.tile(r_i,(n_points_theta,1))
-    integrand_pts_delta_u = delta_u_evals*np.tile(r_i,(n_points_theta,1))
-   
-
-    # Numerical integration Simpson's rule 2D, polar coordinates
-    u_averaged = 1/(np.pi*R0_loc**2)*simps(simps(integrand_pts_u, theta_i, axis = 0),r_i)
-
-    delta_u_averaged = 1/(np.pi*R0_loc**2)*simps(simps(integrand_pts_delta_u, theta_i, axis = 1),r_i, axis=1)
-    
-    """
-    print("averaged_wind_speed, D = ", D_loc)
-    print("averaged_wind_speed, R0 = ", R0_loc)
-    print("averaged_wind_speed, U = ", U)
-    print("averaged_wind_speed, u_averaged = ", u_averaged)
-    """
-
-    return u_averaged, delta_u_averaged
 
 
 def calc_total_P(x_vector, wind_dir, R, Uin, Uout, rho, kappa , C_p, U):
@@ -252,38 +111,12 @@ def calc_total_P(x_vector, wind_dir, R, Uin, Uout, rho, kappa , C_p, U):
     wt_pos[0, :] = x_vector[::2]
     wt_pos[1, :] = x_vector[1::2]
 
-    ang = 0.5*np.pi - wind_dir*np.pi/180 
+    ang = 0.5*np.pi - wind_dir #*np.pi/180 
     vec_dir = np.array([np.cos(ang), np.sin(ang), 0])
 
     return -wfm.Windfarm(wt_pos, vec_dir, R, Uin, Uout, rho, kappa, C_p).power(U)
 
 
-def calc_total_P_old(x_vector, U, wind_dir, R0_loc, alpha, rho, U_cut_in, U_cut_out, U_stop, C_p):
-    #print("Checking x_vector: ", np.shape(x_vector))
-    #    np.atleast_1d(
-    N_turb = int(np.shape(x_vector)[0]/2.)
-    x_all = np.reshape(x_vector, (N_turb, 2))
-    D_loc = 2*R0_loc
-    #N_turb, temp = np.shape(x_all)
-
-    # Averaged wind and deficit factors
-    delta_u_ij = np.zeros((N_turb, N_turb))
-    u_i = np.zeros((N_turb,1))
-    p_i = np.zeros((N_turb,1))
-        
-
-
-    for i in range(N_turb):
-        x_i = x_all[i,:]
-        u_i, delta_uij_temp = averaged_wind_speed(x_i, x_all, U, wind_dir, D_loc, R0_loc[i])
-
-       
-
-        delta_u_ij[i,:] = delta_uij_temp.T
-    
-        p_i[i] = power_ind_turbine(u_i, U_cut_in, U_cut_out, U_stop, C_p, rho, R0_loc[i])
-        
-    return -np.sum(p_i)
 
 def calc_partial(fun, x, fun_param, dl=0.1):
     """
@@ -523,7 +356,7 @@ alpha = 0.3333333
 # Note that alpha=(U-U_R)/U, so the actual wind speeds upstream and downstream of the disc should be used
 
 
-wake_model_param = np.array([C_p, rho, U_cut_in, U_cut_out])
+wake_model_param = np.array([C_p, rho, U_cut_in, U_cut_out, U_stop])
 
 
 
@@ -540,13 +373,20 @@ print("-------------------------------------------------------")
 #x_all = np.array([[0.,0.]])
 #x_all = np.array([[0, 0],[240, 240]])
 
-x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100]])
+#x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100]])
 #x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100],[0,200],[0,-200],[200,0],[-200,0]])
 #x_all = np.array([[0,0],[20,20],[20,-20],[-20,20],[-20,-20],[0,40],[0,-40],[40,0],[-40,0],[40,40],[40,-40],[-40,40],[-40,-40]])
 #x_all = np.array([[0,0],[20,20],[20,-20],[-20,20],[-20,-20],[0,40],[0,-40],[40,0],[-40,0],[40,40],[40,-40],[-40,40],[-40,-40], [60,20],[60,-20],[-60,20],[-60,-20]])
 
+x_all = np.array([[-3e3, -1e3], [-1e3, -1e3], [1e3,-1e3], [3e3, -1e3], [-3e3, 5e2], [-1e3, 5e2], [1e3, 5e2], [3e3, 5e2], [-3e3, 2e3], [-1e3, 2e3], [1e3,2e3], [3e3, 2e3]])
+
 #x_all = np.array([[-4500, 3000], [-2250, 3000], [0,3000], [2250, 3000], [4500,3000],[-4500, 1000], [-2250, 1000], [0,1000], [2250, 1000], [4500,1000], [-4500, -1000], [-2250, -1000], [0, -1000], [2250, -1000], [4500, -1000], [-4500, -3000], [-2250, -3000], [0,-3000], [2250, -3000], [4500,-3000]])
-x_all = np.array([[-4500, 3000], [-2250, 3000], [0,3000], [2250, 3000], [4500,3000],[-4500, 1000], [-2250, 1000], [0,1000], [2250, 1000], [4500,1000]])
+#x_all = np.array([[-4500, 2500], [-2250, 2500], [0,2500], [2250, 2500], [4500,2500],[-4500, 1000], [-2250, 1000], [0,1000], [2250, 1000], [4500,1000]])
+#x_all = np.array([[-3750, 2500], [-2250, 2500], [-750,2500], [750,2500],[2250, 2500], [750, 2500], [-3750,0], [-2250, 0], [-750, 0], [750, 0], [2250, 0], [3750, 0], [-3750, -2500], [-2250, -2500], [-750, -2500], [750, -2500], [225,-2500], [ 3750, -2500]])
+
+#x_all = np.array([[-4500, 2500], [-3000, 2500], [-1500,2500], [0, 2500], [1500,2500],[3000, 2500], [4500, 2500], [-4500,0], [-3000, 0], [-1500, 0], [0, 0], [1500, 0], [3000, 0], [4500, 0], [-4500, -2500], [-3000, -2500], [-1500, -2500], [0,-2500], [1500, -2500], [3000,-2500], [ 4500, -2500]])
+
+
 
 #x_all = np.array([[-2000, 2500],[-1000,2500],[0,2500],[1000, 2500],[2000, 2500]])
 print("x_all.shape", x_all.shape)
@@ -590,10 +430,10 @@ print("Number of turbines:", N_turb)
 
 #lin_constr = LinearConstraint(np.identity(2*N_turb), x_vector-50, x_vector+50 )
 
-xmin = -5000 #-41.6667*R0[0]#-375 #-250
-xmax = 5000 #41.6667*R0[0]#-375 #250
-ymin = -3000 #-25*R0[0]#-250
-ymax = 3000#25*R0[0]#250
+xmin = -4500 #-5000 #-41.6667*R0[0]#-375 #-250
+xmax = 4500 #5000 #41.6667*R0[0]#-375 #250
+ymin = -2500 #-3000 #-25*R0[0]#-250
+ymax = 2500 #3000#25*R0[0]#250
 
 confinement_rectangle = np.array([xmin, ymin, xmax, ymax]) 
 
@@ -624,7 +464,7 @@ N_y = 240
 x_grid = np.linspace(-50*R0[0], 50*R0[0], N_x)
 y_grid = np.linspace(-50*R0[0], 50*R0[0], N_y)
 
-U = 2.0 #np.mean(cop_evals_physical[0,:])
+U = np.mean(cop_evals_physical[0,:])
 wind_dir = np.mean(cop_evals_physical[1,:])*np.pi/180. + np.pi
 
 
@@ -647,30 +487,56 @@ obj_fun = functools.partial(objective_fun_num_robust_design, pts=cop_evals_physi
 #res = minimize(obj_fun, x_vector, method='SLSQP', jac=True, options={'disp': True}, constraints=[lin_constr, nonlinear_constraint]) #constraints=lin_constr) 
 res = minimize(obj_fun, x_vector, method='SLSQP', jac=True, options={'disp': True, 'ftol': opt_tolerance_SLSQP, 'maxiter': maxiter_SLSQP}, constraints=[lin_constr, nonlinear_constraint]) # default: 'ftol': 1e-06
 
+tmp, tmp2, power_mom = objective_fun_num_robust_design(res.x, pts=cop_evals_physical, wts=wts_2D, R0_loc=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, U_stop=U_stop, C_p=C_p)
+
 fileName = pathName+'arrays1/Robust_design_Nturb_' + str(N_turb)  + '_Nq(sp,dir)_' + str(Nq_sp) +'_'+str(Nq_dir) + '.npz'
-np.savez(fileName, init_pos=x_vector, end_pos=res.x, rotor_rad=R0, wake_param=wake_model_param, confine_rectangle = confinement_rectangle)
+np.savez(fileName, init_pos=x_vector, end_pos=res.x, rotor_rad=R0, wake_param=wake_model_param, confine_rectangle = confinement_rectangle, power_moms = power_mom)
 
 x_opt = np.reshape(res.x, (N_turb,2))
 print("Initial turbine locations: ", x_vector)
 print("Objective fun value, init: ", obj_fun(x_vector))
 
 print("Robust design, New turbine locations: ", res.x)
+ 
+
+print("Robust design, New E[power]= ", power_mom[0])
+print("Robust design, New sigma[power]= ", power_mom[1])
+
 
 print("Objective fun value, opt: ", res.fun)
+"""
 for ix in range(N_x):
     for iy in range(N_y):
         x_i = (x_grid[ix], y_grid[iy])
 
         u_eval_optim[ix,iy], temp = wind_speed_due_to_wake(x_i, np.reshape(res.x, (N_turb,2)), U, wind_dir, D, r_i = 0, theta_i = 0)
         delta_u_eval_optim[:,ix,iy] = temp.flatten()
-    
+"""    
+
 
 (xv, yv) = np.meshgrid(x_grid, y_grid)
+
+
+
+wt_pos = np.zeros((3, N_turb))
+print("N_turb = ", N_turb)
+wt_pos[0, :] = res.x[::2]
+wt_pos[1, :] = res.x[1::2]
+print("wt_pos:", wt_pos)
+kappa = 0.05
+
+ang = 0.5*np.pi - (wind_dir )#*np.pi/180 
+vec_dir = np.array([np.cos(ang), np.sin(ang), 0])
+
+blah=wfm.Windfarm(wt_pos, vec_dir, R0[0], U_cut_in, U_cut_out, rho, kappa, C_p) 
+blah.power(U)
+u_eval_optim = blah.wind_field(U, xv, yv)
 
 fig = plt.figure(constrained_layout=True)
 fig.set_size_inches(4.0, 4.0)
 #cmap2 = plt.get_cmap("jet")
-im1= plt.imshow(u_eval_optim.T, interpolation='antialiased', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, origin='lower', aspect='auto')
+im1= plt.imshow(u_eval_optim, interpolation='antialiased', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, origin='lower', aspect='auto')
+#im1= plt.pcolormesh(xv,yv, u_eval_optim)
 # interpolation='bicubic'
 plt.scatter(x_all[:,0], x_all[:,1], s=50, c='blue', marker='+')
 fig.colorbar(im1)
@@ -682,7 +548,7 @@ plt.title('Wind speed, opt. locations')
 ###
 fig1 = plt.figure(constrained_layout=True) #JOH
 fig1.set_size_inches(4.2, 3.5) #JOH
-im1= plt.imshow(u_eval_optim.T, interpolation='antialiased', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, origin='lower', aspect='auto')
+im1= plt.imshow(u_eval_optim, interpolation='antialiased', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, origin='lower', aspect='auto')
 #cset = plt.contourf(xv, yv, u_eval_optim.T, cmap=cm.coolwarm)
 #plt.scatter(x_all[:,0], x_all[:,1], s=50, c='black', marker='+')
 #plt.scatter(x_opt[:,0], x_opt[:,1], s=30, c='black', marker='o')
@@ -742,6 +608,7 @@ print("Initial turbine locations: ", x_vector)
 print("New turbine locations, mean dir and speed: ", res.x)
 print("Objective fun value, init: ", obj_fun(x_vector))
 print("Objective fun value, opt: ", res.fun)
+"""
 for ix in range(N_x):
     for iy in range(N_y):
         x_i = (x_grid[ix], y_grid[iy])
@@ -749,8 +616,26 @@ for ix in range(N_x):
         u_eval_optim[ix,iy], temp = wind_speed_due_to_wake(x_i, np.reshape(res.x, (N_turb,2)), U, wind_dir, D, r_i = 0, theta_i = 0)
         delta_u_eval_optim[:,ix,iy] = temp.flatten()
 
-
+"""
 ###
+
+
+wt_pos = np.zeros((3, N_turb))
+print("N_turb = ", N_turb)
+wt_pos[0, :] = res.x[::2]
+wt_pos[1, :] = res.x[1::2]
+print("wt_pos:", wt_pos)
+kappa = 0.05
+
+ang = 0.5*np.pi - (wind_dir )#*np.pi/180 
+vec_dir = np.array([np.cos(ang), np.sin(ang), 0])
+
+blah=wfm.Windfarm(wt_pos, vec_dir, R0[0], U_cut_in, U_cut_out, rho, kappa, C_p) 
+blah.power(U)
+u_eval_optim = blah.wind_field(U, xv, yv)
+
+
+
 now = datetime.datetime.now()
 print("-------------------------------------------------------")
 print('end mean-wind opt. time: ', now)
@@ -759,7 +644,7 @@ print("-------------------------------------------------------")
 #(xv, yv) = np.meshgrid(x_grid, y_grid)
 fig2 = plt.figure(constrained_layout=True)
 fig2.set_size_inches(4.2, 3.5)
-im1= plt.imshow(u_eval_optim.T, interpolation='antialiased', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, origin='lower', aspect='auto')
+im1= plt.imshow(u_eval_optim, interpolation='antialiased', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, origin='lower', aspect='auto')
 #cset = plt.contourf(xv, yv, u_eval_optim.T, cmap=cm.coolwarm) #zdir='z', offset=25, cmap=cm.coolwarm)
 plt.scatter(x_all[:,0], x_all[:,1], s=50, c='black', marker='+')
 plt.scatter(x_opt[:,0], x_opt[:,1], s=30, c='black', marker='o')
