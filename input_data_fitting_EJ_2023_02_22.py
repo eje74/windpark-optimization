@@ -299,11 +299,12 @@ def copulaDataGeneration(copula_loc, data_samples_loc, Nq_sp_loc, Nq_dir_loc, U_
     # Transform back evaluations to the original scale
     cop_evals_physical = np.asarray([np.quantile(data_samples_loc[i,:], cop_evals[:, i]) for i in range(0, num_dim)])
 
-    cop_evals_physical[1,:]*=np.pi/180.
+    cop_evals_physical[1,:] = cop_evals_physical[1,:]*np.pi/180. + np.pi
 
     print('windDataGeneration() done')
 
     return cop_evals_physical, wts_2D
+    #Returns wind directions in radians
 
     ######################################################################################################
 
@@ -493,6 +494,7 @@ res = minimize(obj_fun, x_vector, method='SLSQP', jac=True, options={'disp': Tru
 tmp, tmp2, power_mom = objective_fun_num_robust_design(res.x, pts=cop_evals_physical, wts=wts_2D, R0_loc=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, U_stop=U_stop, C_p=C_p)
 
 fileName = pathName+'arrays1/Robust_design_Nturb_' + str(N_turb)  + '_Nq(sp,dir)_' + str(Nq_sp) +'_'+str(Nq_dir) + '.npz'
+fileName2 = pathName+'arrays1/mean_dir_Nturb_' + str(N_turb)  + '_Nq(sp,dir)_' + str(Nq_sp) +'_'+str(Nq_dir) + '.npz'
 np.savez(fileName, init_pos=x_vector, end_pos=res.x, rotor_rad=R0, wake_param=wake_model_param, confine_rectangle = confinement_rectangle, power_moms = power_mom)
 
 x_opt = np.reshape(res.x, (N_turb,2))
@@ -604,8 +606,10 @@ x_opt = np.reshape(res.x, (N_turb,2))
 
 print("-------------------------------------------------------")
 print("---------------HER KOMMER TALLENE VI TRENGER:-------------------")
-objective_fun_num_robust_design(res.x, pts=cop_evals_physical, wts=wts_2D, R0_loc=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, U_stop=U_stop, C_p=C_p) # OLAV 
+tmp, tmp2, power_mom = objective_fun_num_robust_design(res.x, pts=cop_evals_physical, wts=wts_2D, R0_loc=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, U_stop=U_stop, C_p=C_p) # OLAV 
 #obj_fun = functools.partial(objective_fun_num_robust_design, pts=cop_evals_physical, wts=wts_2D, R0=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, C_p=C_p)
+
+np.savez(fileName2, init_pos=x_vector, end_pos=res.x, rotor_rad=R0, wake_param=wake_model_param, confine_rectangle = confinement_rectangle, power_moms = power_mom)
 
 print("Initial turbine locations: ", x_vector)
 print("New turbine locations, mean dir and speed: ", res.x)

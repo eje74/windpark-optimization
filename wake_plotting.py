@@ -358,12 +358,12 @@ def copulaDataGeneration(copula_loc, data_samples_loc, Nq_sp_loc, Nq_dir_loc, U_
     # Transform back evaluations to the original scale
     cop_evals_physical = np.asarray([np.quantile(data_samples_loc[i,:], cop_evals[:, i]) for i in range(0, num_dim)])
 
-    cop_evals_physical[1,:]*=np.pi/180.
+    cop_evals_physical[1,:] = cop_evals_physical[1,:]*np.pi/180. + np.pi
 
     print('windDataGeneration() done')
 
     return cop_evals_physical, wts_2D
-    
+    #Returns wind directions in radians
 
     ######################################################################################################
 
@@ -402,8 +402,9 @@ print("test: ", str(Nq_sp) )
 
 pathName = '/home/AD.NORCERESEARCH.NO/olau/Documents/projects/DynPosWind/opt_farm/data/'
 fileName = pathName+'arrays1/Robust_design_Nturb_' + str(N_turb)  + '_Nq(sp,dir)_' + str(Nq_sp) +'_'+ str(Nq_dir) + '.npz'
-
+fileName2 = pathName+'arrays1/mean_dir_Nturb_' + str(N_turb)  + '_Nq(sp,dir)_' + str(Nq_sp) +'_'+ str(Nq_dir) + '.npz'
 npzfile = np.load(fileName)
+npzfile2 = np.load(fileName2)
 print('Tag names of saved arrays:', npzfile.files)
 
 
@@ -417,6 +418,11 @@ wake_model_param = npzfile['wake_param']
 R0 = npzfile['rotor_rad']
 confinement_rectangle = npzfile['confine_rectangle']
 power_moms = npzfile['power_moms']
+
+
+init_pos_mean = npzfile2['init_pos']
+end_pos_mean = npzfile2['end_pos']
+power_moms_mean = npzfile2['power_moms']
 
 #------------------------Wake model parameters----------------------------------
 C_p = wake_model_param[0]
@@ -439,9 +445,13 @@ print('[xmin ymin xmax ymax]', confinement_rectangle)
 
 print("max power each turbine, P=", 0.5*rho*np.pi*R0**2*C_p*U_cut_out**3/1e6,"MW")
 print("------------------------------------")
-print("Robust design, New E[power]= ", power_moms[0])
+print("Robust design, New E[power]= ", -power_moms[0])
 print("Robust design, New sigma[power]= ", power_moms[1])
 print("------------------------------------")
+
+print("Mean wind, New E[power]= ", -power_moms_mean[0])
+print("------------------------------------")
+
 
 
 # Visualize wind field due to wake effects
@@ -548,26 +558,7 @@ U, wind_dir, wts_2D_plot  = windDataGenerationPlot(copula, data_samples, Nq_sp_p
 
 u_eval_optim *=0
 
-"""
-for ix in range(N_x):
-    print('ix=', ix)
-    for iy in range(N_y):
-        
-        x_i = (x_grid[ix], y_grid[iy])
 
-
-
-        for q in range(Nq_sp_plot*Nq_dir_plot):
-           
-            #U = cop_evals_physical_plot[0,q]
-            #wind_dir = cop_evals_physical_plot[1,q]*np.pi/180.
-            
-            #u_eval_optim[ix,iy], temp = wind_speed_due_to_wake(x_i, np.reshape(res.x, (N_turb,2)), U, wind_dir, D, r_i = 0, theta_i = 0)
-            temp_u, temp_delta = wind_speed_due_to_wake(x_i, x_opt, U[q], wind_dir[q], D, r_i = 0, theta_i = 0)
-            
-            u_eval_optim[ix,iy] += temp_u*wts_2D_plot[q]
-            delta_u_eval_optim[:,ix,iy] += wts_2D_plot[q]*temp_delta.flatten()
-"""    
 
 (xv, yv) = np.meshgrid(x_grid, y_grid)
 
