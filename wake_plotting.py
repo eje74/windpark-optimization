@@ -12,6 +12,7 @@ import sys
 import pylab
 import datetime
 import windfarmmodel as wfm
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 from scipy.special import rel_entr
 from pylab import *
@@ -410,10 +411,26 @@ def plotMeanWindField(x_grid, y_grid, end_pos, title_string, R0, U, wind_dir, U_
     fig1=plt.gcf()
     ax=fig1.gca()
 
+    plt.xlabel('$X\ [\mathrm{m}]$', fontsize=18)
+    plt.ylabel('$Y\ [\mathrm{m}]$', rotation=90, fontsize=18)
+
+    plt.tick_params(labelsize=18)
+    ax.tick_params(axis='y', labelrotation = 90)
+
+    axins1 = inset_axes(ax,
+                        width="50%",  # width = 50% of parent_bbox width
+                        height="6%",  # height : 5%
+                        loc='upper left')
+
+    cbar=fig1.colorbar(im1, cax=axins1, orientation="horizontal")
+    cbar.set_label('$\mathrm{[m/s]}$', rotation=0, labelpad= -12, fontsize = 12)
     ax.set_aspect('equal') #JOH
-    fig1.colorbar(im1, orientation="horizontal", location = "top", shrink = 0.75)
-    plt.xlabel('$X\ [\mathrm{m}]$')
-    plt.ylabel('$Y\ [\mathrm{m}]$', rotation=90)
+    axins1.xaxis.tick_top()
+    axins1.xaxis.set_tick_params(pad=2, labelsize=14)
+    #cbar = fig1.colorbar(im1, orientation="horizontal", location = "top", shrink = 0.75)
+    
+  
+    
     plt.title(title_string) #('Wind speed, opt. locations')
 
     return fig1
@@ -425,8 +442,12 @@ def plotMeanWindField(x_grid, y_grid, end_pos, title_string, R0, U, wind_dir, U_
 ################################### MAIN ###########################################
 
 plt.close('all')
-plt.rcParams['text.usetex'] = True
-
+#plt.rcParams['text.usetex'] = True
+plt.rcParams.update({
+    'font.size': 8,
+    'text.usetex': True,
+    'text.latex.preamble': r'\usepackage{amsfonts}'
+})
 
 #NBNBNBNBNBNBNB
 
@@ -440,15 +461,20 @@ power1Turbine = 10593736.459690852
 
 #N_turb_array = np.array([1, 2, 3, 4, 5, 9, 12, 15, 18, 20, 30])
 
-N_turb_array = np.array([1, 2])
+#N_turb_array = np.array([2, 3, 4, 5, 9, 12, 15, 18, 20, 30])
 
-#N_turb_array = np.array([12, 15, 20, 30])
+#N_turb_array = np.array([12])
+
+N_turb_array = np.array([12, 15, 20, 30])
 
 
 print("Number of turbines in Farms: ", N_turb_array)
 print("Number of Farms: ", len(N_turb_array))
 powerFarm = np.zeros(len(N_turb_array))
 powerFarmMean = np.zeros(len(N_turb_array))
+
+powerFarmSigma = np.zeros(len(N_turb_array))
+powerFarmMeanSigma = np.zeros(len(N_turb_array))
 
 for nt in np.arange(len(N_turb_array)):
     print("Farm number", nt)
@@ -538,6 +564,12 @@ for nt in np.arange(len(N_turb_array)):
     powerFarm[nt] = -power_moms[0]
     powerFarmMean[nt] = -power_moms_mean[0]
 
+    
+    powerFarmSigma[nt] = power_moms[1]
+    powerFarmMeanSigma[nt] = power_moms_mean[1]
+
+    print("sigma:", powerFarmSigma[nt])
+
     # Visualize wind field due to wake effects
     N_x = 300
     N_y = 300
@@ -575,158 +607,187 @@ for nt in np.arange(len(N_turb_array)):
 
 
 
-
-    #for x, y in zip(x_opt[:,0], x_opt[:,1]):
-    #    circle = plt.Circle((x,y), radius=R0[0], fill=False, linestyle='--', color='black')
-    #    fig=plt.gcf()
-    #    ax=fig.gca()
-    #    ax.add_patch(circle)
-   
-                                      
-
-
-
-
-
     fun_param = R0[0], U, wind_dir, U_cut_in, U_cut_out, rho, C_p
 
     #title_string = ''
     #fig1 = plotMeanWindField(x_grid, y_grid, end_pos, title_string, *fun_param)
 
 
-    title_string = ''
-    fig2 = plotMeanWindField(x_grid, y_grid, end_pos_mean, title_string, *fun_param)
-    plt.savefig(pathName + 'arrays1/figures/' + 'meanWindDirN_'+str(N_turb)+'.pdf', format='pdf', bbox_inches='tight', transparent = "True")
+    # title_string = ''
+    # fig2 = plotMeanWindField(x_grid, y_grid, end_pos_mean, title_string, *fun_param)
+    # plt.savefig(pathName + 'arrays1/figures/' + 'meanWindDirN_'+str(N_turb)+'.pdf', format='pdf', bbox_inches='tight', transparent = "True")
 
     
-    mu=0
+    # mu=0
 
-    """
-    for q in range(len(wts_2D)):
-        ang = 0.5*np.pi - (wind_dir_tmp[q] )#*np.pi/180 
-        vec_dir = np.array([np.cos(ang), np.sin(ang), 0])
+    # """
+    # for q in range(len(wts_2D)):
+    #     ang = 0.5*np.pi - (wind_dir_tmp[q] )#*np.pi/180 
+    #     vec_dir = np.array([np.cos(ang), np.sin(ang), 0])
 
-        blah=wfm.Windfarm(wt_pos, vec_dir, R0[0], U_cut_in, U_cut_out, rho, kappa, C_p) 
-        P_evals=blah.power(Utmp[q])
-        u_eval_optim += blah.wind_field(Utmp[q], xv, yv)*wts_2D[q]
-        mu += P_evals*wts_2D[q]
+    #     blah=wfm.Windfarm(wt_pos, vec_dir, R0[0], U_cut_in, U_cut_out, rho, kappa, C_p) 
+    #     P_evals=blah.power(Utmp[q])
+    #     u_eval_optim += blah.wind_field(Utmp[q], xv, yv)*wts_2D[q]
+    #     mu += P_evals*wts_2D[q]
 
-    print("------------------------------------")
-    print("Plotting Total Power:", mu)
-    print("------------------------------------")
+    # print("------------------------------------")
+    # print("Plotting Total Power:", mu)
+    # print("------------------------------------")
 
 
-    tmp, tmp2, power_mom = objective_fun_num_robust_design(end_pos, pts=cop_evals_physical, wts=wts_2D, R0_loc=R0, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, U_stop=U_stop, C_p=C_p)
+    # tmp, tmp2, power_mom = objective_fun_num_robust_design(end_pos, pts=cop_evals_physical, wts=wts_2D, R0_loc=R0, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, U_stop=U_stop, C_p=C_p)
 
-    print("Plotting obj Power:", power_mom[0])
-    """
+    # print("Plotting obj Power:", power_mom[0])
+    # """
 
-    U, wind_dir, wts_2D_plot  = windDataGenerationPlot(copula, data_samples, Nq_sp_plot, Nq_dir_plot)
-
-    #U = cop_evals_physical[0,:]
-    #wind_dir = cop_evals_physical[1,:]*np.pi/180. + np.pi
-    #wts_2D_plot = wts_2D
-
-    u_eval_optim *=0
+    # U, wind_dir, wts_2D_plot  = windDataGenerationPlot(copula, data_samples, Nq_sp_plot, Nq_dir_plot)
 
 
 
-    (xv, yv) = np.meshgrid(x_grid, y_grid)
-
-    for q in range(len(wts_2D_plot)):
-        ang = 0.5*np.pi - (wind_dir[q] )#*np.pi/180 
-        vec_dir = np.array([np.cos(ang), np.sin(ang), 0])
-
-        blah=wfm.Windfarm(wt_pos, vec_dir, R0[0], U_cut_in, U_cut_out, rho, kappa, C_p) 
-        P_evals=blah.power(U[q])
-        u_eval_optim += blah.wind_field(U[q], xv, yv)*wts_2D_plot[q]
-        mu += P_evals*wts_2D_plot[q]
+    # u_eval_optim *=0
 
 
-    fileName = pathName+'arrays1/wake_mean' + str(N_turb)  + '_Nq(sp,dir)_' + str(Nq_sp) +'_'+str(Nq_dir) + '.npz'
-    np.savez(fileName, u_eval=u_eval_optim, xv=xv, yv=yv)
+
+    # (xv, yv) = np.meshgrid(x_grid, y_grid)
+
+    # for q in range(len(wts_2D_plot)):
+    #     ang = 0.5*np.pi - (wind_dir[q] )#*np.pi/180 
+    #     vec_dir = np.array([np.cos(ang), np.sin(ang), 0])
+
+    #     blah=wfm.Windfarm(wt_pos, vec_dir, R0[0], U_cut_in, U_cut_out, rho, kappa, C_p) 
+    #     P_evals=blah.power(U[q])
+    #     u_eval_optim += blah.wind_field(U[q], xv, yv)*wts_2D_plot[q]
+    #     mu += P_evals*wts_2D_plot[q]
 
 
-    # fig = plt.figure(constrained_layout=True)
-    # fig.set_size_inches(4.0, 4.0)
-    # #cmap2 = plt.get_cmap("jet")
-
-    # ###
-
-    # #bounds=[4,5,6,7,8,10]
-
-    # #cmap = colors.ListedColormap(plt.cm.coolwarm)
-    # #norm = colors.BoundaryNorm(bounds, cmap.N)
-    # ###
-
-    # im1= plt.imshow(u_eval_optim, interpolation='nearest', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, vmin=VminPlot, vmax=VmaxPlot, origin='lower', aspect='auto')
-    # # interpolation='bicubic' 'antialiased'
-    # #plt.scatter(x_all[:,0], x_all[:,1], s=50, c='blue', marker='+')
-    # fig.colorbar(im1)
-    # plt.xlabel('$X$ [m]')
-    # plt.ylabel('$Y$ [m]', rotation=0)
+    # fileName = pathName+'arrays1/wake_mean' + str(N_turb)  + '_Nq(sp,dir)_' + str(Nq_sp) +'_'+str(Nq_dir) + '.npz'
+    # np.savez(fileName, u_eval=u_eval_optim, xv=xv, yv=yv)
 
 
-    #cmap2 = plt.get_cmap("jet")
+    # fig1 = plt.figure(constrained_layout=True) #JOH
+    # fig1.set_size_inches(4.2, 3.5) #JOH
+    # cmap=plt.cm.coolwarm #([0,0.1,0.2,0.4,0.7,1])
+    # figLevels = np.linspace(VminPlot, VmaxPlot, 12)
+    # #figLevels =  [4,5,6,7,8,9.5] #[0.1,0.2,0.3,0.4,0.5,0.6,0.7, 0.95]
+    # im1= plt.imshow(u_eval_optim, interpolation='nearest', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, vmin=VminPlot, vmax=VmaxPlot, origin='lower', aspect='auto', rasterized=True)
+    # set = plt.contourf(xv, yv, u_eval_optim, levels=figLevels, cmap=cmap, rasterized=True)
+    # plt.scatter(init_pos[::2], init_pos[1::2], s=50, c='black', marker='+')
+    # plt.plot([xmin, xmin], [ymin, ymax], linestyle='dashed', color='black')
+    # plt.plot([xmax, xmax], [ymin, ymax], linestyle='dashed', color='black')
+    # plt.plot([xmin, xmax], [ymin, ymin], linestyle='dashed', color='black')
+    # plt.plot([xmin, xmax], [ymax, ymax], linestyle='dashed', color='black')
 
-    ###
+    # for x, y in zip(wt_pos[0, :], wt_pos[1, :]):
+    #     circle = plt.Circle((x,y), radius=R0[0], fill=False, linestyle='--', color='black')
+    #     fig1=plt.gcf()
+    #     ax=fig1.gca()
+    #     ax.add_patch(circle)
 
-    #bounds=[4,5,6,7,8,10]
-
-    #cmap = colors.ListedColormap(plt.cm.coolwarm)
-    #norm = colors.BoundaryNorm(bounds, cmap.N)
-    ##
-
-    ###
-    ###
-    fig1 = plt.figure(constrained_layout=True) #JOH
-    fig1.set_size_inches(4.2, 3.5) #JOH
-    cmap=plt.cm.coolwarm #([0,0.1,0.2,0.4,0.7,1])
-    figLevels = np.linspace(VminPlot, VmaxPlot, 12)
-    #figLevels =  [4,5,6,7,8,9.5] #[0.1,0.2,0.3,0.4,0.5,0.6,0.7, 0.95]
-    im1= plt.imshow(u_eval_optim, interpolation='nearest', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, vmin=VminPlot, vmax=VmaxPlot, origin='lower', aspect='auto', rasterized=True)
-    set = plt.contourf(xv, yv, u_eval_optim, levels=figLevels, cmap=cmap, rasterized=True)
-    plt.scatter(init_pos[::2], init_pos[1::2], s=50, c='black', marker='+')
-    #plt.scatter(x_all[:,0], x_all[:,1], s=50, c='black', marker='+')
-    #plt.scatter(x_opt[:,0], x_opt[:,1], s=30, c='black', marker='o')
-    plt.plot([xmin, xmin], [ymin, ymax], linestyle='dashed', color='black')
-    plt.plot([xmax, xmax], [ymin, ymax], linestyle='dashed', color='black')
-    plt.plot([xmin, xmax], [ymin, ymin], linestyle='dashed', color='black')
-    plt.plot([xmin, xmax], [ymax, ymax], linestyle='dashed', color='black')
-
-    for x, y in zip(wt_pos[0, :], wt_pos[1, :]):
-        circle = plt.Circle((x,y), radius=R0[0], fill=False, linestyle='--', color='black')
-        fig1=plt.gcf()
-        ax=fig1.gca()
-        ax.add_patch(circle)
-
-    fig=plt.gcf()
-    ax=fig.gca()
-
-    #for x, y in zip(x_opt[:,0], x_opt[:,1]):
-    #    circle = plt.Circle((x,y), radius=R0[0], fill=False, linestyle='--', color='black')
-    #    fig=plt.gcf()
-    #    ax=fig.gca()
-    #    ax.add_patch(circle)
+    # fig=plt.gcf()
+    # ax=fig.gca()
    
-                                      
+    # plt.xlabel('$X\ [\mathrm{m}]$', fontsize=18)
+    # plt.ylabel('$Y\ [\mathrm{m}]$', rotation=90, fontsize=18)
 
-    ax.set_aspect('equal') #JOH
-    #fig.colorbar(im1)
-    fig1.colorbar(im1, orientation="horizontal", location = "top", shrink = 0.75)
-    plt.xlabel('$X\ [\mathrm{m}]$')
-    plt.ylabel('$Y\ [\mathrm{m}]$', rotation=90)
-    #plt.title('Robust design') #('Wind speed, opt. locations')
-    plt.savefig(pathName + 'arrays1/figures/' + 'WindFieldAveN_'+str(N_turb)+'.pdf', format='pdf', bbox_inches='tight', transparent = "True")
+    # plt.tick_params(labelsize=18)
+    # ax.tick_params(axis='y', labelrotation = 90)
+
+    # axins1 = inset_axes(ax,
+    #                     width="50%",  # width = 50% of parent_bbox width
+    #                     height="6%",  # height : 5%
+    #                     loc='upper left')
+
+    # cbar=fig1.colorbar(im1, cax=axins1, orientation="horizontal")
+    # cbar.set_label('$\mathrm{[m/s]}$', rotation=0, labelpad= -12, fontsize = 12)
+    # ax.set_aspect('equal') #JOH
+    # axins1.xaxis.tick_top()
+    # axins1.xaxis.set_tick_params(pad=2, labelsize=14)
+    
+    # ax.set_aspect('equal') #JOH
+    # #fig.colorbar(im1)
+    # #fig1.colorbar(im1, orientation="horizontal", location = "top", shrink = 0.75)
+    
+    # #plt.title('Robust design') #('Wind speed, opt. locations')
+    # plt.savefig(pathName + 'arrays1/figures/' + 'WindFieldAveN_'+str(N_turb)+'.pdf', format='pdf', bbox_inches='tight', transparent = "True")
+
+    # ############################################
+
+    # wt_pos[0, :] = end_pos_mean[::2]
+    # wt_pos[1, :] = end_pos_mean[1::2]
+
+    # u_eval_optim *=0
+
+    # for q in range(len(wts_2D_plot)):
+    #     ang = 0.5*np.pi - (wind_dir[q] )#*np.pi/180 
+    #     vec_dir = np.array([np.cos(ang), np.sin(ang), 0])
+
+    #     blah=wfm.Windfarm(wt_pos, vec_dir, R0[0], U_cut_in, U_cut_out, rho, kappa, C_p) 
+    #     P_evals=blah.power(U[q])
+    #     u_eval_optim += blah.wind_field(U[q], xv, yv)*wts_2D_plot[q]
+    #     mu += P_evals*wts_2D_plot[q]
+
+
+    # fileName = pathName+'arrays1/wake_mean' + str(N_turb)  + '_Nq(sp,dir)_' + str(Nq_sp) +'_'+str(Nq_dir) + '.npz'
+    # np.savez(fileName, u_eval=u_eval_optim, xv=xv, yv=yv)
+
+
+    # fig1 = plt.figure(constrained_layout=True) #JOH
+    # fig1.set_size_inches(4.2, 3.5) #JOH
+    # cmap=plt.cm.coolwarm #([0,0.1,0.2,0.4,0.7,1])
+    # figLevels = np.linspace(VminPlot, VmaxPlot, 12)
+    # #figLevels =  [4,5,6,7,8,9.5] #[0.1,0.2,0.3,0.4,0.5,0.6,0.7, 0.95]
+    # im1= plt.imshow(u_eval_optim, interpolation='nearest', extent=(xv.min(),xv.max(),yv.min(),yv.max()), cmap=plt.cm.coolwarm, vmin=VminPlot, vmax=VmaxPlot, origin='lower', aspect='auto', rasterized=True)
+    # set = plt.contourf(xv, yv, u_eval_optim, levels=figLevels, cmap=cmap, rasterized=True)
+    # plt.scatter(init_pos[::2], init_pos[1::2], s=50, c='black', marker='+')
+    # plt.plot([xmin, xmin], [ymin, ymax], linestyle='dashed', color='black')
+    # plt.plot([xmax, xmax], [ymin, ymax], linestyle='dashed', color='black')
+    # plt.plot([xmin, xmax], [ymin, ymin], linestyle='dashed', color='black')
+    # plt.plot([xmin, xmax], [ymax, ymax], linestyle='dashed', color='black')
+
+    # for x, y in zip(wt_pos[0, :], wt_pos[1, :]):
+    #     circle = plt.Circle((x,y), radius=R0[0], fill=False, linestyle='--', color='black')
+    #     fig1=plt.gcf()
+    #     ax=fig1.gca()
+    #     ax.add_patch(circle)
+
+    # fig=plt.gcf()
+    # ax=fig.gca()
+   
+    # plt.xlabel('$X\ [\mathrm{m}]$', fontsize=18)
+    # plt.ylabel('$Y\ [\mathrm{m}]$', rotation=90, fontsize=18)
+
+    # plt.tick_params(labelsize=18)
+    # ax.tick_params(axis='y', labelrotation = 90)
+
+    # axins1 = inset_axes(ax,
+    #                     width="50%",  # width = 50% of parent_bbox width
+    #                     height="6%",  # height : 5%
+    #                     loc='upper left')
+
+    # cbar=fig1.colorbar(im1, cax=axins1, orientation="horizontal")
+    # cbar.set_label('$\mathrm{[m/s]}$', rotation=0, labelpad= -12, fontsize = 12)
+    # ax.set_aspect('equal') #JOH
+    # axins1.xaxis.tick_top()
+    # axins1.xaxis.set_tick_params(pad=2, labelsize=14)
+    
+    # ax.set_aspect('equal') #JOH
+    # #fig.colorbar(im1)
+    # #fig1.colorbar(im1, orientation="horizontal", location = "top", shrink = 0.75)
+    
+    # #plt.title('Robust design') #('Wind speed, opt. locations')
+    # plt.savefig(pathName + 'arrays1/figures/' + 'WindFieldAveMEANOPTN_'+str(N_turb)+'.pdf', format='pdf', bbox_inches='tight', transparent = "True")
     
 
-plt.figure(figsize=(8, 4))
+#END LOOP OVER FARMS
+
+
+plt.figure(figsize=(5, 5))
 plt.plot(N_turb_array, powerFarm/power1Turbine/N_turb_array, 'ko-', markerfacecolor='none', label = '$\mathrm{Robust\ Design}$')
 plt.plot(N_turb_array, powerFarmMean/power1Turbine/N_turb_array, 'ks--', markerfacecolor='none', label = '$\mathrm{Mean\ Wind}$')
 
 plt.tick_params(labelsize=18)
-plt.xlabel('$\mathrm{Number\ of\ Turbines\ }N_T$', fontsize = 22)
-plt.ylabel(r'$P^{N_T}/(N_T \cdot P^1)$', fontsize = 22)
+plt.xlabel('$N_\mathrm{T}$', fontsize = 22)
+plt.ylabel(r'$\mathbb{E}[P({N_\mathrm{T}})]/(N_\mathrm{T} \cdot \mathbb{E}[P(1)])$', fontsize = 22)
 plt.legend(loc="best", frameon=False, fontsize=14)
 
 plt.savefig(pathName + 'arrays1/figures/' + 'powerPerTurbRelative.pdf', format='pdf', bbox_inches='tight')
@@ -736,25 +797,55 @@ plt.savefig(pathName + 'arrays1/figures/' + 'powerPerTurbRelative.pdf', format='
 
 domain_area = (xmax-xmin)*(ymax-ymin)*1e-6
 
-plt.figure(figsize=(8, 4))
-plt.plot(N_turb_array, powerFarm*1e-6/domain_area, 'k o', markerfacecolor='none', label = '$\mathrm{Robust\ Design}$')
-plt.plot(N_turb_array, powerFarmMean*1e-6/domain_area, 'k s', markerfacecolor='none', label = '$\mathrm{Mean\ Wind}$')
-plt.plot(N_turb_array, N_turb_array*power1Turbine*1e-6/domain_area, 'k', markerfacecolor='none', label = '$\mathrm{Ideal}$')
+plt.figure(figsize=(5, 5))
+plt.plot(N_turb_array, powerFarm*1e-6/domain_area, 'ko-', markerfacecolor='none', label = '$\mathrm{Robust\ Design}$')
+plt.plot(N_turb_array, powerFarmMean*1e-6/domain_area, 'ks--', markerfacecolor='none', label = '$\mathrm{Mean\ Wind}$')
+plt.plot(N_turb_array, N_turb_array*power1Turbine*1e-6/domain_area, 'k-.', markerfacecolor='none', label = '$N_\mathrm{T} \cdot \mathbb{E}[P(1)]/ \mathrm{Area}$')
 plt.tick_params(labelsize=18)
-plt.xlabel('$\mathrm{Number\ of\ Turbines\ }N_T$', fontsize = 22)
-plt.ylabel('$\mathrm{Power/Area}\ [\mathrm{MW/km}^2]$', fontsize = 22)
+plt.xlabel('$N_\mathrm{T}$', fontsize = 22)
+plt.ylabel('$\mathbb{E}[P({N_\mathrm{T}})] / \mathrm{Area} \ [\mathrm{MW/km}^2]$', fontsize = 22)
 plt.legend(loc="best", frameon=False, fontsize=14)
 
 plt.savefig(pathName + 'arrays1/figures/' + 'powerPerAreaFig.pdf', format='pdf', bbox_inches='tight')
 
 #plt.title(title_string) #('Wind speed, opt. locations')
 
+print("rob:", powerFarm*1e-6/domain_area)
+print("mean farm:", powerFarmMean*1e-6/domain_area)
+
+
+plt.figure(figsize=(5.5, 5.5))
+plt.plot(N_turb_array, powerFarm/(1e6)/N_turb_array, 'ko-', markerfacecolor='none', label = '$\mathrm{Robust\ Design}$')
+plt.plot(N_turb_array, (powerFarm + powerFarmSigma)/(1e6)/N_turb_array, 'ko--', markerfacecolor='none') #, label = '$\mathrm{Robust\ Design}$')
+plt.plot(N_turb_array, (powerFarm - powerFarmSigma)/(1e6)/N_turb_array, 'ko--', markerfacecolor='none') #, label = '$\mathrm{Robust\ Design}$')
+
+plt.plot(N_turb_array, powerFarmMean/(1e6)/N_turb_array, 'ks-', markerfacecolor='none', label = '$\mathrm{Mean\ Wind}$')
+plt.plot(N_turb_array, (powerFarmMean + powerFarmMeanSigma)/(1e6)/N_turb_array, 'ks--', markerfacecolor='none') #, label = '$\mathrm{Mean\ Wind}$')
+plt.plot(N_turb_array, (powerFarmMean - powerFarmMeanSigma)/(1e6)/N_turb_array, 'ks--', markerfacecolor='none') #, label = '$\mathrm{Mean\ Wind}$')
+
+plt.tick_params(labelsize=18)
+plt.xlabel('$\mathrm{Number\ of\ Turbines\ }N_\mathrm{T}$', fontsize = 22)
+plt.ylabel(r'$\mathbb{E}[P({N_\mathrm{T}})] \pm \sigma[P({N_\mathrm{T}})]\ [\mathrm{MW}]$', fontsize = 22)
+plt.legend(loc="best", frameon=False, fontsize=14)
+
+plt.savefig(pathName + 'arrays1/figures/' + 'powerPerTurbStd.pdf', format='pdf', bbox_inches='tight')
 
 
 
+plt.figure(figsize=(5.5, 5.5))
+plt.plot(N_turb_array, powerFarmSigma/powerFarm, 'ko-', markerfacecolor='none', label = '$\mathrm{Robust\ Design}$')
 
 
 
+plt.plot(N_turb_array, powerFarmMeanSigma/powerFarmMean, 'ks--', markerfacecolor='none', label = '$\mathrm{Mean\ Wind}$')
+
+
+plt.tick_params(labelsize=18)
+plt.xlabel('$N_\mathrm{T}$', fontsize = 22)
+plt.ylabel(r'$ \sigma[P({N_\mathrm{T}})]/\mathbb{E}[P({N_\mathrm{T}})]]$', fontsize = 22)
+plt.legend(loc="best", frameon=False, fontsize=14)
+
+plt.savefig(pathName + 'arrays1/figures/' + 'powerPerTurbStdRel.pdf', format='pdf', bbox_inches='tight')
 
 
 plt.show()
