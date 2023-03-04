@@ -144,7 +144,8 @@ def calc_partial(fun, x, fun_param, dl=0.1):
     
 def objective_fun_num(x_vector, U, wind_dir, R0_loc, alpha, rho, U_cut_in, U_cut_out, U_stop, C_p):
     kappa = 0.05
-    fun_param = wind_dir, R0_loc[0], U_cut_in, U_cut_out, rho, kappa , alpha, U
+    #fun_param = wind_dir, R0_loc[0], U_cut_in, U_cut_out, rho, kappa , alpha, U
+    fun_param = wind_dir, R0_loc[0], U_cut_in, U_cut_out, rho, kappa , C_p, U
     return calc_total_P(x_vector, *fun_param), calc_partial(calc_total_P, x_vector, fun_param)
 
 def cons_c(x_vector, c_J_ind):
@@ -298,9 +299,12 @@ def copulaDataGeneration(copula_loc, data_samples_loc, Nq_sp_loc, Nq_dir_loc, U_
     # Transform back evaluations to the original scale
     cop_evals_physical = np.asarray([np.quantile(data_samples_loc[i,:], cop_evals[:, i]) for i in range(0, num_dim)])
 
+    cop_evals_physical[1,:] = cop_evals_physical[1,:]*np.pi/180. + np.pi
+
     print('windDataGeneration() done')
 
     return cop_evals_physical, wts_2D
+    #Returns wind directions in radians
 
     ######################################################################################################
 
@@ -308,7 +312,6 @@ pathName = '/home/AD.NORCERESEARCH.NO/olau/Documents/projects/DynPosWind/opt_far
 #pathName = '/Users/pepe/Documents/MATLAB/wind_Matlab/'
 #pathName = "C:/Users/jhel/" #'Documents/MATLAB/wind_Matlab/'
 #pathName = "/home/AD.NORCERESEARCH.NO/esje/Programs/GitHub/windpark-optimization/data/"
-
 
 
 # Set number of quadrature points for the regions 1 ([U_cut_in, U_cut_out]) and 2 ([U_cut_out, infty])
@@ -332,6 +335,17 @@ maxiter_SLSQP = 200
 now = datetime.datetime.now()
 np.random.seed(0)
 rotorRadius = 120. #50.
+RR = rotorRadius
+
+xmin = 0 #-4500 #-5000 #-41.6667*R0[0]#-375 #-250
+xmax = 2400 #4500 #5000 #41.6667*R0[0]#-375 #250
+ymin = 0 #-2500 #-3000 #-25*R0[0]#-250
+ymax = 2000 #2500 #3000#25*R0[0]#250
+
+xL = xmax - xmin - 4*RR 
+yL = ymax - ymin -4*RR
+
+
 
 # Instantiate copula object from precomputed model saved to file
 
@@ -344,7 +358,7 @@ print(copula)
 cop_evals_physical, wts_2D = copulaDataGeneration(copula, data_samples, Nq_sp, Nq_dir, U_cut_in, U_cut_out, U_stop)
 
 Utmp = cop_evals_physical[0,:]
-wind_dir_tmp = cop_evals_physical[1,:]*np.pi/180. + np.pi
+wind_dir_tmp = cop_evals_physical[1,:] #*np.pi/180. + np.pi
 
 #num_samples = 10000 #Number of model evaluations
 #num_samples = 26304
@@ -352,7 +366,7 @@ wind_dir_tmp = cop_evals_physical[1,:]*np.pi/180. + np.pi
 
 # Some physical/technical parameters must be introduced already here
 # Induction factor alpha, based on the actuator disc model
-alpha = 0.3333333
+alpha = 0 #0.3333333
 # Note that alpha=(U-U_R)/U, so the actual wind speeds upstream and downstream of the disc should be used
 
 
@@ -365,20 +379,64 @@ print('start time: ', now)
 print("-------------------------------------------------------")
 
 
+
+
 # JAN 2023, try opt under unc.
 
 
 # Coordinates of all wind turbines
 
-#x_all = np.array([[0.,0.]])
-#x_all = np.array([[0, 0],[240, 240]])
+x_all = np.array([[0.,0.]])
+
+x_all = np.array([[xmin+2*RR, xmin+2*RR+yL/2],[ymin+2*RR+xL, ymin+2*RR+yL/2]])
 
 #x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100]])
 #x_all = np.array([[0,0],[100,100],[100,-100],[-100,100],[-100,-100],[0,200],[0,-200],[200,0],[-200,0]])
 #x_all = np.array([[0,0],[20,20],[20,-20],[-20,20],[-20,-20],[0,40],[0,-40],[40,0],[-40,0],[40,40],[40,-40],[-40,40],[-40,-40]])
 #x_all = np.array([[0,0],[20,20],[20,-20],[-20,20],[-20,-20],[0,40],[0,-40],[40,0],[-40,0],[40,40],[40,-40],[-40,40],[-40,-40], [60,20],[60,-20],[-60,20],[-60,-20]])
 
-x_all = np.array([[-3e3, -1e3], [-1e3, -1e3], [1e3,-1e3], [3e3, -1e3], [-3e3, 5e2], [-1e3, 5e2], [1e3, 5e2], [3e3, 5e2], [-3e3, 2e3], [-1e3, 2e3], [1e3,2e3], [3e3, 2e3]])
+#3
+#x_all = np.array([[2*RR, 2000-2*RR],[1200, 1000], [2400-2*RR, 2*RR]])
+
+#4
+#x_all = np.array([[xmin+2*RR, ymin+2*RR], [xmin+2*RR + xL, ymin+2*RR], [xmin+2*RR, ymin+2*RR+yL], [xmin+2*RR + xL, ymin+2*RR+yL]])
+
+#5
+#x_all = np.array([[xmin+2*RR, ymax-2*RR],[0.5*(xmin+xmax), 0.5*(ymin+ymax)], [xmax-2*RR, ymin+2*RR], [xmin+2*RR, ymin+2*RR], [xmax-2*RR, ymax-2*RR]])
+
+#9
+#x_all = np.array([[xmin+2*RR, ymax-2*RR],[0.5*(xmin+xmax), ymin+2*RR],[xmin+2*RR, 0.5*(ymin+ymax)],[xmax-2*RR, 0.5*(ymin+ymax)],[0.5*(xmin+xmax), 0.5*(ymin+ymax)], [xmax-2*RR, ymin+2*RR], [xmin+2*RR, ymin+2*RR], [xmax-2*RR, ymax-2*RR], [0.5*(xmin+xmax), ymax-2*RR]])
+
+#12
+#x_all = np.array([[xmin+2*RR, ymin+2*RR], [xmin+2*RR + xL/3, ymin+2*RR], [xmin+2*RR + 2*xL/3, ymin+2*RR], [xmin+2*RR+xL, ymin+2*RR], [xmin+2*RR, ymin+2*RR+yL/2], [xmin+2*RR + xL/3, ymin+2*RR+yL/2], [xmin+2*RR + 2*xL/3, ymin+2*RR+yL/2], [xmin+2*RR+xL, ymin+2*RR+yL/2], [xmin+2*RR, ymin+2*RR+yL], [xmin+2*RR + xL/3, ymin+2*RR+yL], [xmin+2*RR + 2*xL/3, ymin+2*RR+yL], [xmin+2*RR+xL, ymin+2*RR+yL]])
+#15
+#x_all = np.array([[xmin+2*RR, ymin+2*RR], [xmin+2*RR + xL/4, ymin+2*RR], [xmin+2*RR + 2*xL/4, ymin+2*RR], [xmin+2*RR+3*xL/4, ymin+2*RR], [xmin+2*RR+xL, ymin+2*RR], [xmin+2*RR, ymin+2*RR+yL/2], [xmin+2*RR + xL/4, ymin+2*RR+yL/2], [xmin+2*RR + 2*xL/4, ymin+2*RR+yL/2], [xmin+2*RR+3*xL/4, ymin+2*RR+yL/2], [xmin+2*RR+xL, ymin+2*RR+yL/2], [xmin+2*RR, ymin+2*RR+yL], [xmin+2*RR + xL/4, ymin+2*RR+yL], [xmin+2*RR + 2*xL/4, ymin+2*RR+yL], [xmin+2*RR+3*xL/4, ymin+2*RR+yL], [xmin+2*RR+xL, ymin+2*RR+yL]])
+
+#18
+#x_all = np.array([[xmin+2*RR, ymin+2*RR], [xmin+2*RR + xL/5, ymin+2*RR], [xmin+2*RR + 2*xL/5, ymin+2*RR], [xmin+2*RR+3*xL/5, ymin+2*RR], [xmin+2*RR+4*xL/5, ymin+2*RR], [xmin+2*RR+xL, ymin+2*RR], 
+#                  [xmin+2*RR, ymin+2*RR+yL/2], [xmin+2*RR + xL/5, ymin+2*RR+yL/2], [xmin+2*RR + 2*xL/5, ymin+2*RR+yL/2], [xmin+2*RR+3*xL/5, ymin+2*RR+yL/2], [xmin+2*RR+4*xL/5, ymin+2*RR+yL/2], [xmin+2*RR+xL, ymin+2*RR+yL/2], 
+#                  [xmin+2*RR, ymin+2*RR+yL], [xmin+2*RR + xL/5, ymin+2*RR+yL], [xmin+2*RR + 2*xL/5, ymin+2*RR+yL], [xmin+2*RR+3*xL/5, ymin+2*RR+yL], [xmin+2*RR+4*xL/5, ymin+2*RR+yL], [xmin+2*RR+xL, ymin+2*RR+yL]])
+
+#20
+#x_all = np.array([[xmin+2*RR, ymin+2*RR], [xmin+2*RR + xL/4, ymin+2*RR], [xmin+2*RR + 2*xL/4, ymin+2*RR], [xmin+2*RR+3*xL/4, ymin+2*RR], [xmin+2*RR+4*xL/4, ymin+2*RR], 
+#                  [xmin+2*RR, ymin+2*RR+yL/3], [xmin+2*RR + xL/4, ymin+2*RR+yL/3], [xmin+2*RR + 2*xL/4, ymin+2*RR+yL/3], [xmin+2*RR+3*xL/4, ymin+2*RR+yL/3], [xmin+2*RR+4*xL/4, ymin+2*RR+yL/3],
+#                  [xmin+2*RR, ymin+2*RR+2*yL/3], [xmin+2*RR + xL/4, ymin+2*RR+2*yL/3], [xmin+2*RR + 2*xL/4, ymin+2*RR+2*yL/3], [xmin+2*RR+3*xL/4, ymin+2*RR+2*yL/3], [xmin+2*RR+4*xL/4, ymin+2*RR+2*yL/3],   
+#                  [xmin+2*RR, ymin+2*RR+yL], [xmin+2*RR + xL/4, ymin+2*RR+yL], [xmin+2*RR + 2*xL/4, ymin+2*RR+yL], [xmin+2*RR+3*xL/4, ymin+2*RR+yL], [xmin+2*RR+4*xL/4, ymin+2*RR+yL]])
+
+#30
+#x_all = np.array([[xmin+2*RR, ymin+2*RR], [xmin+2*RR + xL/5, ymin+2*RR], [xmin+2*RR + 2*xL/5, ymin+2*RR], [xmin+2*RR+3*xL/5, ymin+2*RR], [xmin+2*RR+4*xL/5, ymin+2*RR], [xmin+2*RR+5*xL/5, ymin+2*RR], 
+#                  [xmin+2*RR, ymin+2*RR+yL/4], [xmin+2*RR + xL/5, ymin+2*RR+yL/4], [xmin+2*RR + 2*xL/5, ymin+2*RR+yL/4], [xmin+2*RR+3*xL/5, ymin+2*RR+yL/4], [xmin+2*RR+4*xL/5, ymin+2*RR+yL/4], [xmin+2*RR+5*xL/5, ymin+2*RR+yL/4],
+#                  [xmin+2*RR, ymin+2*RR+2*yL/4], [xmin+2*RR + xL/5, ymin+2*RR+2*yL/4], [xmin+2*RR + 2*xL/5, ymin+2*RR+2*yL/4], [xmin+2*RR+3*xL/5, ymin+2*RR+2*yL/4], [xmin+2*RR+4*xL/5, ymin+2*RR+2*yL/4], [xmin+2*RR+5*xL/5, ymin+2*RR+2*yL/4], 
+#                  [xmin+2*RR, ymin+2*RR+3*yL/4], [xmin+2*RR + xL/5, ymin+2*RR+3*yL/4], [xmin+2*RR + 2*xL/5, ymin+2*RR+3*yL/4], [xmin+2*RR+3*xL/5, ymin+2*RR+3*yL/4], [xmin+2*RR+4*xL/5, ymin+2*RR+3*yL/4], [xmin+2*RR+5*xL/5, ymin+2*RR+3*yL/4],
+#                  [xmin+2*RR, ymin+2*RR+4*yL/4], [xmin+2*RR + xL/5, ymin+2*RR+4*yL/4], [xmin+2*RR + 2*xL/5, ymin+2*RR+4*yL/4], [xmin+2*RR+3*xL/5, ymin+2*RR+4*yL/4], [xmin+2*RR+4*xL/5, ymin+2*RR+4*yL/4], [xmin+2*RR+5*xL/5, ymin+2*RR+4*yL/4]])
+
+
+
+#x_all = np.array([[0, 0],[-500, 0], [500, 0],[-1000, 0], [1000, 0]])
+
+#x_all = np.array([[0, 0],[-500, 0], [500, 0],[-1000, 0], [1000, 0], [-2000, 0], [2000, 0], [3000, 0]])
+
+#x_all = np.array([[-3e3, -1e3], [-1e3, -1e3], [1e3,-1e3], [3e3, -1e3], [-3e3, 5e2], [-1e3, 5e2], [1e3, 5e2], [3e3, 5e2], [-3e3, 2e3], [-1e3, 2e3], [1e3,2e3], [3e3, 2e3]])
 
 #x_all = np.array([[-4500, 3000], [-2250, 3000], [0,3000], [2250, 3000], [4500,3000],[-4500, 1000], [-2250, 1000], [0,1000], [2250, 1000], [4500,1000], [-4500, -1000], [-2250, -1000], [0, -1000], [2250, -1000], [4500, -1000], [-4500, -3000], [-2250, -3000], [0,-3000], [2250, -3000], [4500,-3000]])
 #x_all = np.array([[-4500, 2500], [-2250, 2500], [0,2500], [2250, 2500], [4500,2500],[-4500, 1000], [-2250, 1000], [0,1000], [2250, 1000], [4500,1000]])
@@ -430,10 +488,7 @@ print("Number of turbines:", N_turb)
 
 #lin_constr = LinearConstraint(np.identity(2*N_turb), x_vector-50, x_vector+50 )
 
-xmin = -4500 #-5000 #-41.6667*R0[0]#-375 #-250
-xmax = 4500 #5000 #41.6667*R0[0]#-375 #250
-ymin = -2500 #-3000 #-25*R0[0]#-250
-ymax = 2500 #3000#25*R0[0]#250
+
 
 confinement_rectangle = np.array([xmin, ymin, xmax, ymax]) 
 
@@ -464,8 +519,11 @@ N_y = 240
 x_grid = np.linspace(-50*R0[0], 50*R0[0], N_x)
 y_grid = np.linspace(-50*R0[0], 50*R0[0], N_y)
 
+x_grid = np.linspace(xmin-4*R0[0], 50*R0[0], N_x)
+y_grid = np.linspace(ymin-4*R0[0], 50*R0[0], N_y)
+
 U = np.mean(cop_evals_physical[0,:])
-wind_dir = np.mean(cop_evals_physical[1,:])*np.pi/180. + np.pi
+wind_dir = np.mean(cop_evals_physical[1,:])  #*np.pi/180. + np.pi
 
 
 u_eval = np.zeros((N_x, N_y))
@@ -474,7 +532,33 @@ delta_u_eval = np.zeros((N_turb, N_x, N_y))
 u_eval_optim = np.zeros((N_x, N_y))
 delta_u_eval_optim = np.zeros((N_turb, N_x, N_y))
 
+####################
 
+# fig1 = plt.figure(constrained_layout=True) #JOH
+# fig1.set_size_inches(4.2, 3.5) #JOH
+# plt.scatter(x_all[:,0], x_all[:,1], s=50, c='black', marker='+')
+# plt.plot([xmin, xmin], [ymin, ymax], linestyle='dashed', color='black')
+# plt.plot([xmax, xmax], [ymin, ymax], linestyle='dashed', color='black')
+# plt.plot([xmin, xmax], [ymin, ymin], linestyle='dashed', color='black')
+# plt.plot([xmin, xmax], [ymax, ymax], linestyle='dashed', color='black')
+
+# for x, y in zip(x_all[:,0], x_all[:,1]):
+#     circle = plt.Circle((x,y), radius=R0[0], fill=False, linestyle='--', color='black')
+#     fig2=plt.gcf()
+#     ax=fig2.gca()
+#     ax.add_patch(circle)
+
+                        
+# plt.xlabel('$X\ [\mathrm{m}]$')
+# plt.ylabel('$Y\ [\mathrm{m}]$', rotation=90)
+# plt.title('Initial Configuration') #('Wind speed, opt. locations')
+
+# plt.show()
+# ####################
+# exit(1)
+
+fileName = pathName+'arrays1/Robust_design_Nturb_' + str(N_turb)  + '_Nq(sp,dir)_' + str(Nq_sp) +'_'+str(Nq_dir) + '.npz'
+fileName2 = pathName+'arrays1/mean_dir_Nturb_' + str(N_turb)  + '_Nq(sp,dir)_' + str(Nq_sp) +'_'+str(Nq_dir) + '.npz'
 
 print("-----------")
 print("Initial turbine Production: ")
@@ -489,7 +573,7 @@ res = minimize(obj_fun, x_vector, method='SLSQP', jac=True, options={'disp': Tru
 
 tmp, tmp2, power_mom = objective_fun_num_robust_design(res.x, pts=cop_evals_physical, wts=wts_2D, R0_loc=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, U_stop=U_stop, C_p=C_p)
 
-fileName = pathName+'arrays1/Robust_design_Nturb_' + str(N_turb)  + '_Nq(sp,dir)_' + str(Nq_sp) +'_'+str(Nq_dir) + '.npz'
+
 np.savez(fileName, init_pos=x_vector, end_pos=res.x, rotor_rad=R0, wake_param=wake_model_param, confine_rectangle = confinement_rectangle, power_moms = power_mom)
 
 x_opt = np.reshape(res.x, (N_turb,2))
@@ -601,8 +685,10 @@ x_opt = np.reshape(res.x, (N_turb,2))
 
 print("-------------------------------------------------------")
 print("---------------HER KOMMER TALLENE VI TRENGER:-------------------")
-objective_fun_num_robust_design(res.x, pts=cop_evals_physical, wts=wts_2D, R0_loc=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, U_stop=U_stop, C_p=C_p) # OLAV 
+tmp, tmp2, power_mom = objective_fun_num_robust_design(res.x, pts=cop_evals_physical, wts=wts_2D, R0_loc=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, U_stop=U_stop, C_p=C_p) # OLAV 
 #obj_fun = functools.partial(objective_fun_num_robust_design, pts=cop_evals_physical, wts=wts_2D, R0=R0, alpha=alpha, rho=rho, U_cut_in=U_cut_in, U_cut_out=U_cut_out, C_p=C_p)
+
+np.savez(fileName2, init_pos=x_vector, end_pos=res.x, rotor_rad=R0, wake_param=wake_model_param, confine_rectangle = confinement_rectangle, power_moms = power_mom)
 
 print("Initial turbine locations: ", x_vector)
 print("New turbine locations, mean dir and speed: ", res.x)
@@ -618,7 +704,7 @@ for ix in range(N_x):
 
 """
 ###
-
+(xv, yv) = np.meshgrid(x_grid, y_grid)
 
 wt_pos = np.zeros((3, N_turb))
 print("N_turb = ", N_turb)
