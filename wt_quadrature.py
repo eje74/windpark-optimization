@@ -69,6 +69,20 @@ quadrature_weights = np.array([0.11498334179998566] +
                 [0.019156522218855521, 0.062085722273139239, 0.095664962820418119]*4 +
                 [0.085162533604288747, 0.020201237989565462, 0.056834571713156972, 0.024268628331345539]*8)
 
-quadrature_points = np.append(r1.transpose(), r2.transpose(), axis=1) #, r3.transpose, r4.transpose)
+quadrature_points = np.append(r1.transpose(), r2.transpose(), axis=1)
 quadrature_points = np.append(quadrature_points, r3.transpose(), axis=1)
 quadrature_points = np.append(quadrature_points, r4.transpose(), axis=1)
+
+
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    import matplotlib.cm as pcm
+    cmap = pcm.get_cmap("viridis")
+    print("Plott quadrature points")
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+    z_max = np.amax(quadrature_weights)
+    z_min = np.amin(quadrature_weights)
+    for x, y, z in zip(quadrature_points[0,:], quadrature_points[1,:], quadrature_weights):
+        ax.plot(x, y, z, 'o', mec="blue", mfc=cmap((z-z_min)/(z_max-z_min)))
+    plt.show()
